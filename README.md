@@ -1,6 +1,6 @@
 # Link Shortener with Analytics
 
-Educational monorepo project for learning Claude Code: shill generator for short links with detailed analytics (click tracking, referrer analysis, User-Agent parsing).
+Educational monorepo project for learning Claude Code: link shortener generator with detailed analytics (click tracking, referrer analysis, User-Agent parsing).
 
 ## Project Structure
 

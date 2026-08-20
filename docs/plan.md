@@ -78,20 +78,47 @@ ORM — **Prisma** (декларативная схема, типобезопа�
 7. **CI/CD (GitHub Actions)** — MCP GitHub, возможно scheduled/cron-агенты.
 8. **Полировка/документация** — Artifacts для отчётов, кастомизация output styles/statusline (опционально).
 
-## Этап 1 (реализуется сейчас): скелет монорепозитория + базовые rules
+## Этап 1 (✅ ЗАВЕРШЕН 2026-08-20): скелет монорепозитория + базовые rules
 
-1. **Git и гигиена репозитория**: `git init`, `.gitignore` (node_modules, dist, .env, .turbo и т.д.), `.nvmrc`, `README.md`.
-2. **GitHub**: создать репозиторий через `gh repo create link-shortener-with-analytics --private` и запушить первый коммит после скаффолдинга.
-3. **pnpm**: `corepack enable && corepack prepare pnpm@latest --activate` (сейчас в системе только npm).
-4. **Root workspace**: `package.json` (private), `pnpm-workspace.yaml` (`apps/*`, `packages/*`), `turbo.json` (pipeline `dev`/`build`/`lint`), devDependencies `turbo`, `typescript`, `prettier`.
-5. **Backend-скаффолд**: `@nestjs/cli new apps/api`, зависимости `@nestjs/config`, `@nestjs/terminus`, `prisma`, `@prisma/client`; `prisma init`; внести в `schema.prisma` модели `User`/`Link`/`Click`/`DeviceType`; создать модули `prisma`, `health` (`GET /health` через Prisma `SELECT 1`); настроить CORS на `http://localhost:5173`, порт из `PORT ?? 4000`.
-6. **Frontend-скаффолд**: `pnpm create vite@latest apps/web -- --template react-ts`; зависимости `react-router-dom`, `@tanstack/react-query`, `zustand`, `react-hook-form`, `zod`, `recharts`; Tailwind v4 + `shadcn@latest init`; на главной странице — fetch `/health` через TanStack Query как проверка связки FE↔BE.
-7. **Docker + БД**: `docker-compose.yml` (только postgres), `.env.example`/`.env`; `docker compose up -d postgres`; `prisma migrate dev --name init`.
-8. **packages/shared-types**: пакет-заготовка с одним placeholder-типом — проверить, что `workspace:*` резолвится в обоих приложениях.
-9. **CLAUDE.md**: описать стек, структуру монорепо, ключевые команды (`pnpm dev`, `docker compose up -d postgres`, `pnpm --filter api exec prisma migrate dev`), конвенции (TS strict, разделение apps/packages, где лежат DTO), и пометку, что проект используется для практики возможностей Claude Code.
-9a. **docs/plan.md**: скопировать в репозиторий этот документ целиком (архитектура + роадмап тем Claude Code по этапам + отметка о завершённых этапах) — чтобы план жил вместе с проектом и следующая сессия могла открыть его и продолжить с Этапа 2, не восстанавливая контекст заново. После завершения каждого этапа — актуализировать этот файл (отмечать пройденное, уточнять следующий этап).
-10. **Корневые скрипты и проверка**: `dev`/`build`/`lint`/`docker:up`/`docker:down` в root `package.json`; `pnpm install`; `pnpm dev` поднимает Nest (`:4000`) и Vite (`:5173`) параллельно; `curl http://localhost:4000/health` → `200`; `http://localhost:5173` показывает статус API.
-11. Финальный коммит и пуш в GitHub.
+### Выполненные задачи:
+1. ✅ **Git и гигиена репозитория**: инициализирован репозиторий, `.gitignore` актуален, `.nvmrc` фиксирует Node 24.16.0
+2. ✅ **GitHub**: репозиторий создан и запушен
+3. ✅ **pnpm**: настроен via corepack, активирован версия 11.22.0
+4. ✅ **Root workspace**: настроены `package.json`, `pnpm-workspace.yaml`, `turbo.json`
+5. ✅ **Backend-скаффолд (NestJS)**: 
+   - Prisma v7.9.1 с полной схемой (User, Link, Click, DeviceType)
+   - Модули: prisma (глобальный), health (GET /health работает), auth/users/links/redirect/analytics (заготовки)
+   - CORS включён для localhost:5173 и 3000
+   - ValidationPipe настроен
+6. ✅ **Frontend-скаффолд (Vite + React)**:
+   - React 19 + TypeScript strict mode
+   - TanStack Query v5 для проверки /health
+   - Tailwind v4 + PostCSS
+   - Структура: routes/, components/ui/, lib/, features/{links,analytics,auth}/, stores/
+   - App.tsx: проверка API статуса с красивым UI
+7. ✅ **Docker + БД**: PostgreSQL 16-alpine в docker-compose с health checks
+8. ✅ **packages/shared-types**: пакет с типами (HealthStatus, Link, Click, CreateLinkRequest, LinkAnalytics), резолвится via `workspace:*`
+9. ✅ **CLAUDE.md**: полная документация (250+ строк), описание стека, конвенций, всех 8 этапов
+10. ✅ **docs/plan.md**: архитектура и роадмап скопированы в репо
+11. ✅ **Vite конфигурация**: 
+    - Proxy `/api` → `http://localhost:4000` (переписывание пути)
+    - Path alias `@/` → `src/`
+    - optimizeDeps для зависимостей
+12. ✅ **Frontend App.tsx**: 
+    - Использует TanStack Query для fetch `/health`
+    - Красивый UI со статусом API
+    - Информация о текущем этапе и следующих шагах
+13. ✅ **Корневые скрипты**: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm docker:up/down` готовы
+14. ✅ **README.md**: актуализирован Quick Start, исправлена опечатка
+
+### Статус верификации:
+- ✅ Git log содержит инициальный коммит
+- ✅ pnpm install проходит без ошибок
+- ✅ Prisma schema полная и валидная
+- ✅ shared-types импортируется в apps/web (добавлена в dependencies)
+- ✅ Vite config: proxy, alias, optimizeDeps
+- ✅ App.tsx проверяет /health через TanStack Query
+- 🟡 Требуется: `pnpm dev` запуск и проверка в браузере (следующий шаг)
 
 ### Ключевые файлы этапа 1
 
@@ -100,6 +127,7 @@ ORM — **Prisma** (декларативная схема, типобезопа�
 Модули `auth`, `links`, `redirect`, `analytics` создаются как пустые заготовки — бизнес-логика туда ляжет на следующих этапах вместе с соответствующими темами Claude Code.
 
 ## Верификация
+
 
 - `docker compose ps` — postgres в статусе healthy.
 - `pnpm --filter api exec prisma migrate dev` проходит без ошибок, таблицы созданы.

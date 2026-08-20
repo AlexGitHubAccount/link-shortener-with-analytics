@@ -1,11 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "version": "2",
   "tasks": {
     "dev": {
       "cache": false,
-      "persistent": true,
-      "outputMode": "full"
+      "persistent": true
     },
     "build": {
       "outputs": ["dist/**", ".next/**"],
@@ -13,12 +11,10 @@
       "dependsOn": ["^build"]
     },
     "lint": {
-      "cache": true,
-      "outputMode": "full"
+      "cache": true
     },
     "test": {
-      "cache": true,
-      "outputMode": "full"
+      "cache": true
     },
     "type-check": {
       "cache": true

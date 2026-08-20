@@ -10,4 +10,14 @@
   .container {
     @apply max-w-7xl mx-auto px-4;
   }
+
+  /* Reset default styles */
+  code {
+    @apply font-mono text-sm;
+  }
+
+  /* Smooth scrolling */
+  html {
+    @apply scroll-smooth;
+  }
 }
