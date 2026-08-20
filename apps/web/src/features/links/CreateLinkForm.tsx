@@ -82,10 +82,13 @@ export function CreateLinkForm() {
               type="text"
               placeholder="https://example.com"
               aria-invalid={!!errors.originalUrl}
+              aria-describedby={errors.originalUrl ? 'originalUrl-error' : undefined}
               {...register('originalUrl')}
             />
             {errors.originalUrl && (
-              <p className="text-sm text-destructive">{errors.originalUrl.message}</p>
+              <p id="originalUrl-error" className="text-sm text-destructive">
+                {errors.originalUrl.message}
+              </p>
             )}
           </div>
 
@@ -96,10 +99,13 @@ export function CreateLinkForm() {
               type="text"
               placeholder="my-link"
               aria-invalid={!!errors.customCode}
+              aria-describedby={errors.customCode ? 'customCode-error' : undefined}
               {...register('customCode')}
             />
             {errors.customCode && (
-              <p className="text-sm text-destructive">{errors.customCode.message}</p>
+              <p id="customCode-error" className="text-sm text-destructive">
+                {errors.customCode.message}
+              </p>
             )}
           </div>
 

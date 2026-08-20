@@ -20,6 +20,9 @@ export function DevHealthIndicator() {
       className="fixed bottom-4 right-4 flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
       title={ok ? 'API reachable' : 'API unreachable'}
     >
+      {/* Intentionally hardcoded red/green, not theme tokens - this is a universal
+          traffic-light convention (dev-only diagnostic, not part of the app's brand
+          palette), not a drift from the shadcn theme. */}
       <span
         className={`h-2 w-2 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`}
         aria-hidden="true"
