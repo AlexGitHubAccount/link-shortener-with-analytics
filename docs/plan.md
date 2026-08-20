@@ -94,7 +94,7 @@ ORM — **Prisma v6** (стабильная — v7.9.1 пробовали на �
 | № | Этап | Цель | Статус | Файл |
 |---|---|---|---|---|
 | 1 | Инициализация | Скелет монорепозитория, оба сервера стартуют, FE↔BE связаны | ✅ Завершён | [stage-1-initialization.md](./stage-1-initialization.md) |
-| 2 | Backend Core | CRUD `/links` + публичный редирект `/:code` с фиксацией кликов | ⏳ Запланирован | [stage-2-backend-core.md](./stage-2-backend-core.md) |
+| 2 | Backend Core | CRUD `/links` + публичный редирект `/:code` с фиксацией кликов | ✅ Завершён | [stage-2-backend-core.md](./stage-2-backend-core.md) |
 | 3 | Frontend | Dashboard, форма создания ссылки, список ссылок | ⏳ Запланирован | [stage-3-frontend.md](./stage-3-frontend.md) |
 | 4 | Аутентификация | Google OAuth, JWT, изоляция данных по пользователю | ⏳ Запланирован | [stage-4-authentication.md](./stage-4-authentication.md) |
 | 5 | Аналитика | Агрегация кликов, UA-парсинг, графики на странице ссылки | ⏳ Запланирован | [stage-5-analytics.md](./stage-5-analytics.md) |
