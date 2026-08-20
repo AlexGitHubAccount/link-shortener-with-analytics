@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { HealthStatus } from '@link-shortener/shared-types';
+import type { HealthStatus } from '@link-shortener/shared-types';
 import './App.css';
 
 function App() {
   // Fetch /health endpoint to verify FE↔BE connection
-  const { data: health, isLoading, isError } = useQuery<HealthStatus>({
+  const { data: health, isLoading, isError, dataUpdatedAt } = useQuery<HealthStatus>({
     queryKey: ['health'],
     queryFn: async () => {
       const response = await fetch('/api/health');
@@ -50,14 +50,17 @@ function App() {
             </div>
           )}
 
-          {health && (
+          {health && !isError && (
             <div className="bg-green-50 border border-green-200 rounded p-4">
               <p className="text-green-700 font-semibold mb-2">✅ Backend connected!</p>
               <p className="text-green-600 text-sm">
                 Status: <span className="font-mono bg-green-100 px-2 py-1 rounded">{health.status}</span>
               </p>
               <p className="text-green-600 text-sm">
-                Timestamp: <span className="font-mono bg-green-100 px-2 py-1 rounded text-xs">{new Date(health.timestamp).toLocaleString()}</span>
+                Database: <span className="font-mono bg-green-100 px-2 py-1 rounded">{health.info?.database?.status ?? 'unknown'}</span>
+              </p>
+              <p className="text-green-600 text-sm">
+                Last checked: <span className="font-mono bg-green-100 px-2 py-1 rounded text-xs">{new Date(dataUpdatedAt).toLocaleString()}</span>
               </p>
             </div>
           )}

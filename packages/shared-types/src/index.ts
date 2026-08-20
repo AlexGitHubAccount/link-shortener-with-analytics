@@ -5,10 +5,13 @@
  * DTO validation (class-validator for Nest, zod for React) will be added as features are implemented.
  */
 
-// Placeholder type to verify workspace setup
+// Matches the actual shape returned by @nestjs/terminus's HealthCheckService.check()
+// (GET /health) — NOT a placeholder shape, this is what the backend really sends.
 export interface HealthStatus {
-  status: 'up' | 'down';
-  timestamp: string;
+  status: 'ok' | 'error';
+  info?: Record<string, { status: string }>;
+  error?: Record<string, { status: string }>;
+  details?: Record<string, { status: string }>;
 }
 
 // Will be implemented in Stage 2 (Links CRUD)
