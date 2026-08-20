@@ -29,15 +29,9 @@ export class LinksController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Link[]> {
-    const parsedPage = page ? Number(page) : undefined;
-    const parsedLimit = limit ? Number(limit) : undefined;
     return this.linksService.findAll(
-      parsedPage !== undefined && Number.isFinite(parsedPage)
-        ? parsedPage
-        : undefined,
-      parsedLimit !== undefined && Number.isFinite(parsedLimit)
-        ? parsedLimit
-        : undefined,
+      parsePositiveInt(page),
+      parsePositiveInt(limit),
     );
   }
 
@@ -55,4 +49,13 @@ export class LinksController {
   remove(@Param('id') id: string): Promise<Link> {
     return this.linksService.remove(id);
   }
+}
+
+// Rejects non-integer/fractional query values (e.g. "1.5") instead of silently truncating —
+// LinksService.findAll clamps to a safe range, but a fractional page/limit reaching it
+// unnoticed would still be a caller mistake worth falling back to the default, not honoring.
+function parsePositiveInt(value?: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
