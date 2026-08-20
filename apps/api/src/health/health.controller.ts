@@ -12,7 +12,7 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  async check(): Promise<HealthStatus> {
+  async check() {
     return this.health.check([
       async () => {
         try {

@@ -8,7 +8,7 @@
 // Matches the actual shape returned by @nestjs/terminus's HealthCheckService.check()
 // (GET /health) — NOT a placeholder shape, this is what the backend really sends.
 export interface HealthStatus {
-  status: 'ok' | 'error';
+  status: 'ok' | 'error' | 'shutting_down';
   info?: Record<string, { status: string }>;
   error?: Record<string, { status: string }>;
   details?: Record<string, { status: string }>;
@@ -17,6 +17,7 @@ export interface HealthStatus {
 // Will be implemented in Stage 2 (Links CRUD)
 export interface Link {
   id: string;
+  userId: string;
   originalUrl: string;
   shortCode: string;
   isCustomAlias: boolean;
@@ -33,6 +34,7 @@ export interface Click {
   linkId: string;
   clickedAt: string;
   referrer?: string;
+  userAgentRaw?: string;
   browser?: string;
   os?: string;
   deviceType: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'BOT' | 'UNKNOWN';
