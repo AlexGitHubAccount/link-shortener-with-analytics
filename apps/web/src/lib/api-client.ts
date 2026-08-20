@@ -5,6 +5,8 @@
 // top-level backend route, not proxied through Vite. Code that needs to build a short-link
 // URL for display/copy must use REDIRECT_BASE_URL from lib/config.ts, not this client.
 
+import { useAuthStore } from '@/stores/auth.store';
+
 const BASE_URL = '/api';
 
 // NestJS's default HTTP exception body shape: { statusCode, message, error }.
@@ -27,12 +29,28 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = useAuthStore.getState().token;
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...init?.headers,
+    },
   });
 
   if (!res.ok) {
+    if (res.status === 401 && window.location.pathname !== '/login') {
+      // Token missing/expired/invalid - clear it and send the user back to log in rather than
+      // leaving them staring at a broken, half-authenticated UI. A full navigation (not
+      // react-router) is deliberate here: this module isn't a component and has no router
+      // context, and a hard reload also clears any stale in-memory query cache for the
+      // now-unauthenticated session.
+      useAuthStore.getState().logout();
+      window.location.href = '/login';
+    }
+
     const body: unknown = await res.json().catch(() => null);
     const rawMessage = isRecord(body) ? body.message : undefined;
     const messages = Array.isArray(rawMessage)

@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { UsersService } from './users.service';
 
-@Module({})
+@Module({
+  providers: [UsersService],
+  exports: [UsersService], // AuthModule needs it in the Google callback
+})
 export class UsersModule {}

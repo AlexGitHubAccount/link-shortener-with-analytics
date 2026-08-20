@@ -16,6 +16,14 @@ export interface HealthStatus {
   details?: Record<string, { status: string }>;
 }
 
+// Matches the actual JSON shape returned by apps/api's AuthController (GET /auth/me).
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 // Matches the actual JSON shape returned by apps/api's LinksController (Prisma's Link model
 // serialized over HTTP) — title/expiresAt are nullable columns, not absent-optional ones.
 export interface Link {

@@ -7,50 +7,66 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import type { Link } from '@link-shortener/shared-types';
+import { Link } from '@prisma/client';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { LinksService } from './links.service';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
 
-// TODO(stage-4): add an auth guard once Google OAuth lands — these endpoints are intentionally
-// public for now, and LinksService attributes everything to one placeholder user in the meantime.
+// Every route here requires a valid JWT (see JwtAuthGuard/JwtStrategy) and is scoped to the
+// requesting user via @CurrentUser() - RedirectController is the one public exception.
 @Controller('links')
+@UseGuards(JwtAuthGuard)
 export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
-  // LinksService returns @prisma/client's Link (expiresAt: Date, not the JSON-serialized
-  // string shared-types documents for the frontend) — cast at this boundary, same pattern
-  // as HealthController, rather than fight the type mismatch or return `any`.
   @Post()
-  create(@Body() dto: CreateLinkDto): Promise<Link> {
-    return this.linksService.create(dto) as unknown as Promise<Link>;
+  create(
+    @CurrentUser() userId: string,
+    @Body() dto: CreateLinkDto,
+  ): Promise<Link> {
+    return this.linksService.create(userId, dto);
   }
 
   @Get()
   findAll(
+    @CurrentUser() userId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Link[]> {
     return this.linksService.findAll(
+      userId,
       parsePositiveInt(page),
       parsePositiveInt(limit),
-    ) as unknown as Promise<Link[]>;
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<Link> {
-    return this.linksService.findOne(id) as unknown as Promise<Link>;
+  findOne(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+  ): Promise<Link> {
+    return this.linksService.findOne(userId, id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateLinkDto): Promise<Link> {
-    return this.linksService.update(id, dto) as unknown as Promise<Link>;
+  update(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateLinkDto,
+  ): Promise<Link> {
+    return this.linksService.update(userId, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string): Promise<Link> {
-    return this.linksService.remove(id) as unknown as Promise<Link>;
+  remove(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+  ): Promise<Link> {
+    return this.linksService.remove(userId, id);
   }
 }
 

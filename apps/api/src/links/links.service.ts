@@ -3,7 +3,6 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { Link, Prisma } from '@prisma/client';
 import { customAlphabet } from 'nanoid';
@@ -35,39 +34,18 @@ const RESERVED_SHORT_CODES = new Set([
   'api',
 ]);
 
-// TODO(stage-4): replace this module-wide placeholder user with the real authenticated user
-// (via @CurrentUser()) once Google OAuth lands. Link.userId is a required FK in the schema —
-// every link must belong to someone even before real login exists, so we seed one service
-// account and attribute all pre-auth links to it. See docs/stage-2-backend-core.md.
-const PLACEHOLDER_USER = {
-  googleId: 'stage2-placeholder',
-  email: 'placeholder@local',
-  displayName: 'Stage 2 placeholder user',
-};
-
 @Injectable()
-export class LinksService implements OnModuleInit {
-  private placeholderUserId!: string;
-
+export class LinksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async onModuleInit() {
-    const user = await this.prisma.user.upsert({
-      where: { googleId: PLACEHOLDER_USER.googleId },
-      update: {},
-      create: PLACEHOLDER_USER,
-    });
-    this.placeholderUserId = user.id;
-  }
-
-  async create(dto: CreateLinkDto): Promise<Link> {
+  async create(userId: string, dto: CreateLinkDto): Promise<Link> {
     if (dto.customCode) {
       if (RESERVED_SHORT_CODES.has(dto.customCode.toLowerCase())) {
         throw new ConflictException(
           `"${dto.customCode}" is a reserved word and can't be used as a custom code`,
         );
       }
-      return this.createWithCode(dto, dto.customCode, true);
+      return this.createWithCode(userId, dto, dto.customCode, true);
     }
 
     for (
@@ -76,7 +54,12 @@ export class LinksService implements OnModuleInit {
       attempt++
     ) {
       try {
-        return await this.createWithCode(dto, generateShortCode(), false);
+        return await this.createWithCode(
+          userId,
+          dto,
+          generateShortCode(),
+          false,
+        );
       } catch (error) {
         if (!isUniqueConstraintViolation(error, 'shortCode')) {
           throw error;
@@ -91,6 +74,7 @@ export class LinksService implements OnModuleInit {
   }
 
   private async createWithCode(
+    userId: string,
     dto: CreateLinkDto,
     shortCode: string,
     isCustomAlias: boolean,
@@ -98,7 +82,7 @@ export class LinksService implements OnModuleInit {
     try {
       return await this.prisma.link.create({
         data: {
-          userId: this.placeholderUserId,
+          userId,
           originalUrl: dto.originalUrl,
           shortCode,
           isCustomAlias,
@@ -118,7 +102,7 @@ export class LinksService implements OnModuleInit {
     }
   }
 
-  async findAll(page = 1, limit = 20): Promise<Link[]> {
+  async findAll(userId: string, page = 1, limit = 20): Promise<Link[]> {
     const safePage = Math.max(1, Number.isFinite(page) ? page : 1);
     const safeLimit = Math.min(
       Math.max(1, Number.isFinite(limit) ? limit : 20),
@@ -126,16 +110,16 @@ export class LinksService implements OnModuleInit {
     );
 
     return this.prisma.link.findMany({
-      where: { userId: this.placeholderUserId },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
     });
   }
 
-  async findOne(id: string): Promise<Link> {
+  async findOne(userId: string, id: string): Promise<Link> {
     const link = await this.prisma.link.findFirst({
-      where: { id, userId: this.placeholderUserId },
+      where: { id, userId },
     });
     if (!link) {
       throw new NotFoundException(`Link "${id}" not found`);
@@ -143,19 +127,25 @@ export class LinksService implements OnModuleInit {
     return link;
   }
 
-  // Used by RedirectModule — deliberately NOT scoped to placeholderUserId: the public redirect
-  // must resolve any shortCode regardless of owner, unlike the private CRUD methods above.
+  // Used by RedirectModule — deliberately NOT scoped to a userId: the public redirect must
+  // resolve any shortCode regardless of owner, unlike the private CRUD methods above.
   // Returns null instead of throwing so the caller can distinguish 404 (no such code) from
   // 410 Gone (code exists but inactive/expired).
   async findByShortCode(shortCode: string): Promise<Link | null> {
     return this.prisma.link.findUnique({ where: { shortCode } });
   }
 
-  async update(id: string, dto: UpdateLinkDto): Promise<Link> {
-    await this.findOne(id); // 404 if missing / not owned, before attempting the update
+  async update(userId: string, id: string, dto: UpdateLinkDto): Promise<Link> {
+    await this.findOne(userId, id); // 404 if missing / not owned, before attempting the update
 
-    return this.prisma.link.update({
-      where: { id },
+    // updateMany (not update) so the WRITE itself is scoped by { id, userId } - not just the
+    // preceding findOne check. Prisma's update() requires a unique `where`, which id alone
+    // satisfies but id+userId together don't (no compound unique constraint on the schema) -
+    // updateMany accepts a plain filter instead, closing the gap between "checked ownership"
+    // and "wrote the row" a check-then-act pattern would otherwise leave open. Flagged by
+    // security-reviewer (Stage 4) as defense-in-depth, not an active exploit as written.
+    const result = await this.prisma.link.updateMany({
+      where: { id, userId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
@@ -164,16 +154,24 @@ export class LinksService implements OnModuleInit {
         }),
       },
     });
+    if (result.count === 0) {
+      throw new NotFoundException(`Link "${id}" not found`);
+    }
+    return this.findOne(userId, id);
   }
 
   // Soft-delete: keep the row (and its Click history) around, just deactivate it.
   // Redirect treats isActive=false as 410 Gone rather than resolving it.
-  async remove(id: string): Promise<Link> {
-    await this.findOne(id);
-    return this.prisma.link.update({
-      where: { id },
+  async remove(userId: string, id: string): Promise<Link> {
+    await this.findOne(userId, id);
+    const result = await this.prisma.link.updateMany({
+      where: { id, userId }, // see update() above for why updateMany, not update
       data: { isActive: false },
     });
+    if (result.count === 0) {
+      throw new NotFoundException(`Link "${id}" not found`);
+    }
+    return this.findOne(userId, id);
   }
 }
 
