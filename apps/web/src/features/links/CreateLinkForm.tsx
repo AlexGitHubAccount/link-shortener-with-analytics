@@ -30,9 +30,9 @@ const createLinkSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => undefined)),
   title: z
-    .string()
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+    .literal('')
+    .transform(() => undefined)
+    .or(z.string().optional()),
 });
 
 type CreateLinkFormValues = z.infer<typeof createLinkSchema>;

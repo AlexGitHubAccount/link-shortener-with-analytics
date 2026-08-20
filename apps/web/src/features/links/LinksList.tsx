@@ -38,8 +38,12 @@ export function LinksList() {
   }
 
   async function handleCopy(shortUrl: string) {
-    await navigator.clipboard.writeText(shortUrl);
-    toast.success('Copied!');
+    try {
+      await navigator.clipboard.writeText(shortUrl);
+      toast.success('Copied!');
+    } catch {
+      toast.error('Failed to copy link');
+    }
   }
 
   async function handleConfirmDelete() {
