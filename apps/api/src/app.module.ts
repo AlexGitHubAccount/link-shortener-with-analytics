@@ -15,12 +15,17 @@ import { AnalyticsModule } from './analytics/analytics.module';
       envFilePath: '.env',
     }),
     PrismaModule,
+    // RedirectModule's GET /:code is a single-segment wildcard that would swallow any other
+    // top-level single-segment route (/health, /links, ...) registered after it — NestJS/Express
+    // match in registration order, not by specificity. Keep RedirectModule LAST among modules
+    // with top-level GET routes; see RESERVED_SHORT_CODES in links.service.ts for the other half
+    // of this guard (blocking user-chosen customCode values that would collide anyway).
     HealthModule,
     AuthModule,
     UsersModule,
     LinksModule,
-    RedirectModule,
     AnalyticsModule,
+    RedirectModule,
   ],
 })
 export class AppModule {}

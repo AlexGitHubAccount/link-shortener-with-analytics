@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { LinksModule } from '../links/links.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
+import { RedirectController } from './redirect.controller';
 
 @Module({
-  // Public GET /:code endpoint — redirect to original URL and track click
-  // Will be implemented in Stage 2
+  imports: [LinksModule, AnalyticsModule],
+  controllers: [RedirectController],
 })
 export class RedirectModule {}

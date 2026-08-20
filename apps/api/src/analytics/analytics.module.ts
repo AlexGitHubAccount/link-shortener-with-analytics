@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsService } from './analytics.service';
 
 @Module({
-  // Click aggregation, User-Agent parsing, analytics endpoints
-  // Will be implemented in Stage 5
+  providers: [AnalyticsService],
+  exports: [AnalyticsService], // redirect module calls recordClick()
 })
 export class AnalyticsModule {}

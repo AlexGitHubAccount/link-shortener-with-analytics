@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { LinksController } from './links.controller';
+import { LinksService } from './links.service';
 
 @Module({
-  // CRUD operations for short links (create, read, update, delete)
-  // Will be implemented in Stage 2
+  controllers: [LinksController],
+  providers: [LinksService],
+  exports: [LinksService], // redirect module needs it to resolve shortCode -> originalUrl
 })
 export class LinksModule {}

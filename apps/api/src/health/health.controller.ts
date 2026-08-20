@@ -12,17 +12,22 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  async check() {
-    return this.health.check([
+  async check(): Promise<HealthStatus> {
+    const result = await this.health.check([
       async () => {
         try {
           // Check database connection with a simple query
-          await (this.prisma as any).$queryRawUnsafe('SELECT 1');
+          await this.prisma.$queryRawUnsafe('SELECT 1');
           return { database: { status: 'up' } };
         } catch (error) {
-          throw new Error('Database connection failed');
+          throw new Error('Database connection failed', { cause: error });
         }
       },
     ]);
+    // Terminus's HealthCheckResult generic is structurally awkward to match against a hand-written
+    // interface (optional/possibly-undefined nested indicator fields). The actual JSON it serializes
+    // does match HealthStatus (that's what shared-types documents for the frontend) — cast at this
+    // one boundary rather than fight the generic or fall back to returning `any`.
+    return result as HealthStatus;
   }
 }
