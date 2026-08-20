@@ -78,13 +78,10 @@ export class LinksService implements OnModuleInit {
       try {
         return await this.createWithCode(dto, generateShortCode(), false);
       } catch (error) {
-        if (
-          isUniqueConstraintViolation(error, 'shortCode') &&
-          attempt < MAX_SHORT_CODE_GENERATION_ATTEMPTS - 1
-        ) {
-          continue; // extremely rare collision on a random code — just try a new one
+        if (!isUniqueConstraintViolation(error, 'shortCode')) {
+          throw error;
         }
-        throw error;
+        // extremely rare collision on a random code — just try a new one
       }
     }
 
