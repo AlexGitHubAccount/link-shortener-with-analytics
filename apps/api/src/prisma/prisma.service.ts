@@ -4,7 +4,8 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 let PrismaClientImpl: any;
 try {
   // Try v7+ first (PrismaClient as default export)
-  PrismaClientImpl = require('@prisma/client').PrismaClient || require('@prisma/client').default;
+  PrismaClientImpl =
+    require('@prisma/client').PrismaClient || require('@prisma/client').default;
 } catch {
   // Fallback for other versions
   PrismaClientImpl = require('@prisma/client');
@@ -32,7 +33,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return {
       get: (target: any, prop: string) => {
         if (prop === 'prisma') return this.prisma;
-        return (this.prisma as any)[prop];
+        return this.prisma[prop];
       },
     };
   }
