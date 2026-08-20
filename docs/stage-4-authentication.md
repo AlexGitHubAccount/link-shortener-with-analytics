@@ -10,6 +10,7 @@
 
 - **Hooks** — `PreToolUse`/pre-commit хук в `.claude/settings.json` (или git hook), запускающий `lint`+`test` перед каждым коммитом. Особенно уместно именно здесь: security-критичный код (обработка токенов, секретов) не должен коммититься без проверки.
 - **Кастомный subagent `security-reviewer`** — аудит auth-кода: утечка секретов в логи/код, небезопасное хранение токенов на фронте, отсутствие CSRF-защиты, некорректная проверка JWT-подписи.
+- **MCP Semgrep** — статический анализатор (open-source, работает локально, не требует аккаунта) с готовыми правилами на security-паттерны (hardcoded secrets, небезопасные regex, SQL-инъекции). `security-reviewer` использует его как источник объективных находок в дополнение к собственному LLM-ревью кода — не полагаемся только на «мнение» модели.
 
 ## Что реализуем
 
@@ -38,8 +39,9 @@
 4. Реализовать `auth.store`, `LoginPage`, обработку callback, `AuthGuard`.
 5. Обновить `api-client.ts` — авторизационный заголовок и обработка 401.
 6. Настроить pre-commit hook (`lint`+`test`) в `.claude/settings.json`.
-7. Кастомный subagent `security-reviewer` проверяет весь итоговый auth-код (backend + frontend).
-8. Сквозная проверка через `claude-in-chrome`: полный флоу логина от кнопки до Dashboard с реальными данными пользователя.
+7. Добавить MCP Semgrep (`claude mcp add semgrep -- uvx semgrep-mcp` или аналог), прогнать по `apps/api/src/auth/` и `apps/web/src/features/auth/`.
+8. Кастомный subagent `security-reviewer` проверяет весь итоговый auth-код (backend + frontend), опираясь и на находки Semgrep, и на собственный анализ.
+9. Сквозная проверка через `claude-in-chrome`: полный флоу логина от кнопки до Dashboard с реальными данными пользователя.
 
 ## Ключевые файлы
 

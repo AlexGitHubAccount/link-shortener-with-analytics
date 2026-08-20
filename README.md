@@ -73,7 +73,7 @@ This project is a learning vehicle for Claude Code features:
 - **Plan mode** & `CLAUDE.md` (project rules)
 - **Skills** & custom slash-commands
 - **Subagents** (Explore, Plan, general-purpose)
-- **MCP servers** (PostgreSQL inspection, GitHub)
+- **MCP servers** (PostgreSQL, Context7, Docker, claude-in-chrome, Semgrep, Playwright, GitHub — see `docs/plan.md` for the full list and when each is added)
 - **Hooks** (lint/test on commit)
 - **Workflows** & `loops` (multi-agent orchestration)
 - **Agent view**, **agent teams**, **dynamic workflows**

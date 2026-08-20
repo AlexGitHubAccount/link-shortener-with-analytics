@@ -11,6 +11,8 @@
 - **Custom slash-команда** `/gen-nest-crud` — генерирует Nest-модуль (controller/service/dto/module) по паттерну проекта, чтобы не переписывать boilerplate вручную для каждого следующего модуля.
 - **Skills** — переиспользуемый навык для CRUD-паттерна NestJS + Prisma, применимый не только к `links`, но и к будущим модулям.
 - **MCP-сервер PostgreSQL** — инспекция БД прямо из чата Claude Code (посмотреть таблицы, данные, проверить, что клик записался) без переключения в `psql`/Prisma Studio.
+- **MCP Context7** — актуальная документация по версии библиотек прямо в контексте (Prisma v6 API, NestJS-паттерны, `class-validator` декораторы). Подключается один раз здесь и используется до конца проекта — везде, где нужен точный синтаксис быстро меняющейся библиотеки, а не то, что модель «помнит» из обучения (ровно эта причина стояла за граблями с Prisma v7 на Этапе 1 — Context7 мог бы сразу показать актуальный конфиг).
+- **MCP Docker** — инспекция контейнера PostgreSQL (статус, логи) напрямую из чата вместо ручных `docker ps`/`docker logs`; полезно при отладке проблем подключения БД, которые неизбежно будут возникать при разработке CRUD.
 
 ## Что реализуем
 
@@ -42,7 +44,7 @@
 
 ## Пошаговый план работ
 
-1. Добавить MCP-сервер PostgreSQL (`claude mcp add` с connection string из `.env`), проверить, что через него видно существующие таблицы `User`/`Link`/`Click`.
+1. Добавить MCP-серверы: PostgreSQL (`claude mcp add` с connection string из `.env`, проверить видимость таблиц `User`/`Link`/`Click`), Context7 (`claude mcp add context7 -- npx -y @upstash/context7-mcp`), Docker (проверить, что виден контейнер `link-shortener-db`).
 2. Seed-скрипт/lazy-создание служебного пользователя-заглушки (см. врезку выше) — без этого `POST /links` упадёт на FK-constraint.
 3. Написать skill/slash-команду `/gen-nest-crud` — шаблон Nest CRUD-модуля, соответствующий уже принятым в проекте паттернам (`PrismaService`-инъекция, DTO с `class-validator`).
 4. Сгенерировать модуль `links` через эту команду, доработать вручную (генерация `shortCode`, пагинация, привязка к seed-пользователю).
@@ -64,7 +66,7 @@
 | `apps/api/src/analytics/analytics.service.ts` | Заглушка записи клика |
 | `packages/shared-types/src/index.ts` | Реальные `Link`/`CreateLinkRequest` |
 | `.claude/commands/gen-nest-crud.md` или `.claude/skills/nest-crud/` | Slash-команда/skill генерации CRUD |
-| MCP-конфиг (`.mcp.json` или `claude mcp add`) | Подключение PostgreSQL |
+| MCP-конфиг (`.mcp.json` или `claude mcp add`) | Подключение PostgreSQL, Context7, Docker |
 
 ## Верификация
 
