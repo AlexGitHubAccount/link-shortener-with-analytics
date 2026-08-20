@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Link } from '@prisma/client';
+import type { Link } from '@link-shortener/shared-types';
 import { LinksService } from './links.service';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
@@ -19,9 +19,12 @@ import { UpdateLinkDto } from './dto/update-link.dto';
 export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
+  // LinksService returns @prisma/client's Link (expiresAt: Date, not the JSON-serialized
+  // string shared-types documents for the frontend) — cast at this boundary, same pattern
+  // as HealthController, rather than fight the type mismatch or return `any`.
   @Post()
   create(@Body() dto: CreateLinkDto): Promise<Link> {
-    return this.linksService.create(dto);
+    return this.linksService.create(dto) as unknown as Promise<Link>;
   }
 
   @Get()
@@ -32,22 +35,22 @@ export class LinksController {
     return this.linksService.findAll(
       parsePositiveInt(page),
       parsePositiveInt(limit),
-    );
+    ) as unknown as Promise<Link[]>;
   }
 
   @Get(':id')
   findOne(@Param('id') id: string): Promise<Link> {
-    return this.linksService.findOne(id);
+    return this.linksService.findOne(id) as unknown as Promise<Link>;
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateLinkDto): Promise<Link> {
-    return this.linksService.update(id, dto);
+    return this.linksService.update(id, dto) as unknown as Promise<Link>;
   }
 
   @Delete(':id')
   remove(@Param('id') id: string): Promise<Link> {
-    return this.linksService.remove(id);
+    return this.linksService.remove(id) as unknown as Promise<Link>;
   }
 }
 

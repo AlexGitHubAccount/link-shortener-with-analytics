@@ -1,7 +1,10 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { toast } from 'sonner';
+import {
+  createLinkRequestSchema,
+  type CreateLinkRequest,
+} from '@link-shortener/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,28 +18,6 @@ import {
 import { ApiError } from '@/lib/api-client';
 import { useCreateLink } from './useCreateLink';
 
-// Mirrors the backend's CreateLinkDto validation (apps/api/src/links/dto/create-link.dto.ts):
-// originalUrl required + must include a protocol, customCode optional 3-20 alphanumeric.
-// Empty-string optional fields are transformed to undefined - the backend's ValidationPipe
-// runs with forbidNonWhitelisted:true but NOT reject-empty-string, so a naive "" would be
-// silently accepted and stored rather than treated as "not provided".
-const createLinkSchema = z.object({
-  originalUrl: z.url('Enter a valid URL, including http:// or https://'),
-  customCode: z
-    .string()
-    .regex(/^[a-zA-Z0-9]+$/, 'Only letters and digits allowed')
-    .min(3, 'At least 3 characters')
-    .max(20, 'At most 20 characters')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
-  title: z
-    .literal('')
-    .transform(() => undefined)
-    .or(z.string().optional()),
-});
-
-type CreateLinkFormValues = z.infer<typeof createLinkSchema>;
-
 export function CreateLinkForm() {
   const {
     register,
@@ -44,8 +25,8 @@ export function CreateLinkForm() {
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<CreateLinkFormValues>({
-    resolver: zodResolver(createLinkSchema),
+  } = useForm<CreateLinkRequest>({
+    resolver: zodResolver(createLinkRequestSchema),
   });
 
   const createLink = useCreateLink();

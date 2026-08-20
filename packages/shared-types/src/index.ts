@@ -5,6 +5,8 @@
  * DTO validation (class-validator for Nest, zod for React) will be added as features are implemented.
  */
 
+import { z } from 'zod';
+
 // Matches the actual shape returned by @nestjs/terminus's HealthCheckService.check()
 // (GET /health) — NOT a placeholder shape, this is what the backend really sends.
 export interface HealthStatus {
@@ -14,16 +16,17 @@ export interface HealthStatus {
   details?: Record<string, { status: string }>;
 }
 
-// Will be implemented in Stage 2 (Links CRUD)
+// Matches the actual JSON shape returned by apps/api's LinksController (Prisma's Link model
+// serialized over HTTP) — title/expiresAt are nullable columns, not absent-optional ones.
 export interface Link {
   id: string;
   userId: string;
   originalUrl: string;
   shortCode: string;
   isCustomAlias: boolean;
-  title?: string;
+  title: string | null;
   isActive: boolean;
-  expiresAt?: string;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,12 +43,26 @@ export interface Click {
   deviceType: 'DESKTOP' | 'MOBILE' | 'TABLET' | 'BOT' | 'UNKNOWN';
 }
 
-// Will be implemented in Stage 3 (Frontend forms)
-export interface CreateLinkRequest {
-  originalUrl: string;
-  customCode?: string;
-  title?: string;
-}
+// Single source of truth for "create a link" validation on the frontend (mirrored by
+// apps/api/src/links/dto/create-link.dto.ts's class-validator rules on the backend).
+// Empty-string optional fields transform to undefined, matching the backend's ValidationPipe
+// (forbidNonWhitelisted:true, but no reject-empty-string) treating "" as "not provided".
+export const createLinkRequestSchema = z.object({
+  originalUrl: z.url('Enter a valid URL, including http:// or https://'),
+  customCode: z
+    .string()
+    .regex(/^[a-zA-Z0-9]+$/, 'Only letters and digits allowed')
+    .min(3, 'At least 3 characters')
+    .max(20, 'At most 20 characters')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  title: z
+    .literal('')
+    .transform(() => undefined)
+    .or(z.string().optional()),
+});
+
+export type CreateLinkRequest = z.infer<typeof createLinkRequestSchema>;
 
 // Will be implemented in Stage 5 (Analytics)
 export interface LinkAnalytics {
