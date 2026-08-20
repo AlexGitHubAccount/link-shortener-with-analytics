@@ -278,9 +278,13 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 1 (Initialization)**: ✅ Done — monorepo skeleton, both dev servers verified working, `GET /health` returns `200` with DB status, first commits pushed.
 
-**Stages 2–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 2 (Backend Core)**: ✅ Done — `/links` CRUD, public `GET /:code` redirect with fire-and-forget click tracking, `analytics.recordClick()` stub. `PrismaService` rewritten to properly `extends PrismaClient` (was an untyped v6/v7-compat hack from Stage 1). `nanoid` pinned to `^3.3.8` (v4+ is ESM-only, breaks this project's CommonJS backend build — same class of issue as the Prisma v7 rollback). See `docs/stage-2-backend-core.md` for full details.
+
+**Stages 3–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+
+**Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 
 ---
 
-_Updated: 2026-08-20_  
+_Updated: 2026-08-21_  
 _Maintainer: Claude Code learning project_
