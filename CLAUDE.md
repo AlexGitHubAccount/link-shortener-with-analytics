@@ -44,7 +44,7 @@ Key dependencies:
   - Client state: `zustand` (only auth/UI flags, no data)
 - **Forms**: `react-hook-form` + `zod` (schema validation)
 - **Styling**: Tailwind CSS v4 + PostCSS
-- **UI Components**: shadcn/ui (optional, placeholder for component library)
+- **UI Components**: shadcn/ui (Radix UI base, "Nova" preset — set up in Stage 3 via `pnpm dlx shadcn@latest init -b radix -p nova`)
 - **Charts**: `recharts` (analytics visualization)
 - **Port**: 5173 (Vite dev-server default)
 - **Testing**: Vitest + React Testing Library
@@ -259,6 +259,8 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 ### Frontend build
 - **Module not found errors**: Ensure `workspace:*` protocol resolves correctly for `@link-shortener/shared-types`.
 - **Tailwind not styling**: Check `apps/web/src/index.css` has `@import "tailwindcss"`.
+- **`shadcn add` writes files into a literal `./@/` directory instead of `src/`**: the CLI reads the `@/` path alias from `apps/web/tsconfig.json` directly and does not follow TS project `references` into `tsconfig.app.json`. The alias must be declared in **both** `tsconfig.json` and `tsconfig.app.json` (`baseUrl: "."`, `paths: {"@/*": ["./src/*"]}`) — not just `vite.config.ts`'s `resolve.alias`, which only satisfies the bundler, not `tsc` or CLI tooling that reads tsconfig directly.
+- **`erasableSyntaxOnly` (in `tsconfig.app.json`) rejects constructor parameter properties**: `constructor(public readonly x: T)` generates runtime assignment code, which this flag disallows. Declare fields explicitly and assign them in the constructor body instead.
 
 ### API connection
 - **CORS errors**: Verify CORS is enabled in `apps/api/src/main.ts` for `http://localhost:5173`.
@@ -280,7 +282,9 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 2 (Backend Core)**: ✅ Done — `/links` CRUD, public `GET /:code` redirect with fire-and-forget click tracking, `analytics.recordClick()` stub. `PrismaService` rewritten to properly `extends PrismaClient` (was an untyped v6/v7-compat hack from Stage 1). `nanoid` pinned to `^3.3.8` (v4+ is ESM-only, breaks this project's CommonJS backend build — same class of issue as the Prisma v7 rollback). See `docs/stage-2-backend-core.md` for full details.
 
-**Stages 3–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 3 (Frontend)**: ✅ Done — Dashboard with create-link form (react-hook-form + zod, shared validation schema now lives in `packages/shared-types`), links list (soft-delete aware, copy-to-clipboard), `react-router-dom` v7 routing, shadcn/ui (Radix base). `Link` type in `shared-types` fixed to match Prisma's actual nullable-field JSON shape rather than an independently-guessed optional-field shape. See `docs/stage-3-frontend.md` for full details.
+
+**Stages 4–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 **Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 

@@ -1,6 +1,6 @@
 # Этап 3: Frontend — Dashboard, формы, список ссылок
 
-**Статус**: ⏳ Запланирован
+**Статус**: ✅ Завершён (2026-08-21)
 
 ## Цель этапа
 
@@ -50,12 +50,16 @@
 
 | Файл | Назначение |
 |---|---|
-| `apps/web/src/lib/api-client.ts` | Обёртка над `fetch` |
+| `apps/web/src/lib/api-client.ts` | Обёртка над `fetch`, нормализация ошибок NestJS |
+| `apps/web/src/lib/config.ts` | `REDIRECT_BASE_URL` — редирект не проксируется через `/api` |
 | `apps/web/src/lib/query-client.ts` | Инстанс TanStack Query |
 | `apps/web/src/features/links/*` | Хуки и компоненты работы со ссылками |
-| `apps/web/src/routes/Dashboard.tsx`, `NotFound.tsx` | Страницы |
-| `apps/web/src/App.tsx` | Роутинг вместо health-check заглушки |
+| `apps/web/src/routes/{Dashboard,NotFound,Login,LinkDetail}.tsx` | Страницы (Login/LinkDetail — заглушки Этапов 4/5) |
+| `apps/web/src/components/DevHealthIndicator.tsx` | Health-check со Stage 1, перенесённый в угловой индикатор |
+| `apps/web/src/main.tsx` | Роутинг (`createBrowserRouter`) вместо `App.tsx`-заглушки |
 | `apps/web/src/components/ui/*` | shadcn-компоненты |
+| `apps/web/components.json` | Конфиг shadcn CLI |
+| `packages/shared-types/src/index.ts` | `createLinkRequestSchema` (общая zod-схема FE/BE), реальный `Link` |
 | `.claude/agents/ui-reviewer.md` | Кастомный subagent |
 
 ## Верификация
@@ -64,6 +68,22 @@
 - Через `claude-in-chrome`: создание ссылки через форму → появляется в списке → клик по короткому URL приводит на `originalUrl`.
 - `pnpm --filter web lint` — чист.
 - Консоль браузера (`read_console_messages`) не содержит ошибок React/сети.
+
+## Как выполнялось по факту
+
+Использованы `Explore`- и `Plan`-агенты на старте (шаги 1-2 плана) — Explore изучил текущую структуру `apps/web/src`, реальный API-контракт Этапа 2 и зависимости; Plan спроектировал разбивку файлов и порядок реализации на основе этого отчёта. План в целом реализован как задумано, с несколькими находками и отклонениями:
+
+- **shadcn/ui**: инициализирован с `-b radix -p nova` (Radix UI + пресет Nova) — конкретный выбор библиотеки/пресета не был зафиксирован в исходном плане, выбран как разумный дефолт.
+- **Баг CLI shadcn с TS project references**: корневой `tsconfig.json` — solution-style файл (`files: [], references: [...]`) без собственных `compilerOptions`. `shadcn init` читает алиас `@/` из корневого файла напрямую, не проходя по `references` в `tsconfig.app.json`, поэтому без `paths` на корневом уровне CLI сгенерировал файлы в буквальную папку `./@/` вместо `src/`. Исправлено добавлением `baseUrl`/`paths` в **оба** `tsconfig.json` и `tsconfig.app.json` (изначально `@/` был только в `vite.config.ts` — сам TypeScript про алиас не знал).
+- **`@hookform/resolvers`** отсутствовал в зависимостях — добавлен (`^5.9.1`, совместим с zod v4, проверено smoke-тестом на реальную ошибку валидации).
+- **`erasableSyntaxOnly`** (флаг `tsconfig.app.json`) запрещает parameter properties в конструкторе (`constructor(public readonly x: T)`) — генерируют рантайм-код, не чисто стираемый синтаксис. `ApiError` в `api-client.ts` переписан с явными полями и присваиванием в теле конструктора.
+- **`shadcn` CLI-пакет** после `init` попал в `dependencies` — перенесён в `devDependencies` (это инструмент сборки, не рантайм-код).
+- **Health-check виджет Этапа 1**: не удалён, а перенесён в компактный угловой индикатор `components/DevHealthIndicator.tsx` — сохраняет живой сигнал доступности `/api` без доминирования над реальным UI.
+- **Кастомный subagent `.claude/agents/ui-reviewer.md`** создан, но (как и MCP-серверы на Этапе 2) не стал вызываемым в той же сессии, где создан — требуется рестарт Claude Code. Тот же ревью прогнан вручную через `general-purpose`-агента с идентичными инструкциями; нашёл 2 мелкие проблемы (отсутствие `aria-describedby` у сообщений об ошибках формы, нетокенизированные цвета в `DevHealthIndicator`) — обе исправлены сразу.
+- **`/stage-review 3`** (диф от `stage-2-done`) нашёл и исправил реальные проблемы в 2 итерациях на каждый заход:
+  - Заход 1: пустой `title` отправлялся как `""` вместо `undefined` (порядок веток zod-union был неверным); необработанный `navigator.clipboard.writeText` мог дать unhandled rejection без уведомления пользователя.
+  - Заход 2 (интеграция): `LinksController` возвращал Prisma-тип `Link` вместо контракта `shared-types` (несогласованно с паттерном `health.controller.ts`); `Link` в `shared-types` был объявлен независимо от реальной Prisma-модели (optional vs nullable поля) без структурной связи; `CreateLinkRequest`-валидация дублировалась в 3 независимых местах вместо единой zod-схемы, которую сам `CLAUDE.md` описывает как паттерн проекта («Define Zod schemas in packages/shared-types … Same schema = same validation logic everywhere»). Все три исправлены: контроллер кастует на границе (как в `health.controller.ts`), `Link` теперь `title: string | null`/`expiresAt: string | null` (реальная форма Prisma JSON), `createLinkRequestSchema` вынесена в `shared-types` и импортируется фронтендом вместо локальной копии; `zod` добавлен как реальная (не dev-) зависимость `packages/shared-types`.
+- Все фиксы перепроверены вживую через `claude-in-chrome` и `psql` после чистого пересобора (`rm -rf dist && pnpm turbo run build type-check lint`) — 0 ошибок, 0 регрессий.
 
 ## Зависимости от предыдущих этапов
 
