@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { HealthCheckService, HealthCheck } from '@nestjs/terminus';
+import type { HealthStatus } from '@link-shortener/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('health')
@@ -11,7 +12,7 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  async check() {
+  async check(): Promise<HealthStatus> {
     return this.health.check([
       async () => {
         try {

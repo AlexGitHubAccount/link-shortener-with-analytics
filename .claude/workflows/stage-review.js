@@ -1,9 +1,6 @@
 export const meta = {
   name: 'stage-review',
-  description:
-    'Двухзаходное ревью этапа проекта: Заход 1 (диф этапа, параллельно code + security роли), ' +
-    'Заход 2 (весь проект целиком, integration роль). Все ревьюеры и фиксер работают в ' +
-    'изолированных агентских контекстах, не засоряя контекст основной сессии.',
+  description: 'Двухзаходное ревью этапа в изолированном Workflow: Pass 1 (диф) + Pass 2 (полный скан). Все ревьюеры и фиксер работают в отдельных агентских контекстах, не засоряя основную сессию.',
   phases: [
     { title: 'Заход 1: диф этапа', detail: 'Параллельно: code-reviewer + security-reviewer, затем fixer-цикл' },
     { title: 'Заход 2: весь проект', detail: 'Integration-reviewer на полном скане, затем fixer-цикл' },
@@ -116,14 +113,12 @@ if (!args.skipPass1) {
     // Parallel: code-reviewer + security-reviewer on the diff
     const [codeRes, secRes] = await parallel([
       () =>
-        agent({
-          prompt: codeReviewerPrompt(args.diffRange),
+        agent(codeReviewerPrompt(args.diffRange), {
           label: `code-reviewer (iter ${i})`,
           schema: FINDINGS_SCHEMA,
         }),
       () =>
-        agent({
-          prompt: securityReviewerPrompt(args.diffRange),
+        agent(securityReviewerPrompt(args.diffRange), {
           label: `security-reviewer (iter ${i})`,
           schema: FINDINGS_SCHEMA,
         }),
@@ -150,11 +145,10 @@ if (!args.skipPass1) {
 
     // Otherwise: fix findings and loop back
     log(`Заход 1 iteration ${i}: fixing ${codeFindings.length + secFindings.length} findings...`);
-    await agent({
-      prompt: fixerPrompt([
-        { label: 'Code correctness findings', findings: codeFindings },
-        { label: 'Security findings', findings: secFindings },
-      ]),
+    await agent(fixerPrompt([
+      { label: 'Code correctness findings', findings: codeFindings },
+      { label: 'Security findings', findings: secFindings },
+    ]), {
       label: `fixer (pass1, iter ${i})`,
     });
   }
@@ -168,8 +162,7 @@ if (result.status !== 'pass1-dirty') {
     result.pass2.iterations = i;
 
     // Integration reviewer on the full codebase
-    const scanRes = await agent({
-      prompt: integrationReviewerPrompt(args.scanPaths),
+    const scanRes = await agent(integrationReviewerPrompt(args.scanPaths), {
       label: `integration-reviewer (iter ${i})`,
       schema: FINDINGS_SCHEMA,
     });
@@ -193,8 +186,7 @@ if (result.status !== 'pass1-dirty') {
 
     // Otherwise: fix findings and loop back
     log(`Заход 2 iteration ${i}: fixing ${findings.length} findings...`);
-    await agent({
-      prompt: fixerPrompt([{ label: 'Integration findings', findings }]),
+    await agent(fixerPrompt([{ label: 'Integration findings', findings }]), {
       label: `fixer (pass2, iter ${i})`,
     });
   }
