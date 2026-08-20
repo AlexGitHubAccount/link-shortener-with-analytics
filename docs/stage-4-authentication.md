@@ -42,6 +42,7 @@
 7. Добавить MCP Semgrep (`claude mcp add semgrep -- uvx semgrep-mcp` или аналог), прогнать по `apps/api/src/auth/` и `apps/web/src/features/auth/`.
 8. Кастомный subagent `security-reviewer` проверяет весь итоговый auth-код (backend + frontend), опираясь и на находки Semgrep, и на собственный анализ.
 9. Сквозная проверка через `claude-in-chrome`: полный флоу логина от кнопки до Dashboard с реальными данными пользователя.
+10. Прогнать `/stage-review 4` (см. `docs/plan.md`) — только после чистого результата статус меняется на ✅. Учитывая чувствительность этапа (auth), после чистого `stage-review` можно дополнительно вручную запустить `/code-review ultra`.
 
 ## Ключевые файлы
 
