@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +85,9 @@ export function LinksList() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <RouterLink to={`/links/${link.id}`}>Analytics</RouterLink>
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
