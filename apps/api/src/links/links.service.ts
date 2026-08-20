@@ -122,8 +122,11 @@ export class LinksService implements OnModuleInit {
   }
 
   async findAll(page = 1, limit = 20): Promise<Link[]> {
-    const safePage = Math.max(1, page);
-    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const safePage = Math.max(1, Number.isFinite(page) ? page : 1);
+    const safeLimit = Math.min(
+      Math.max(1, Number.isFinite(limit) ? limit : 20),
+      100,
+    );
 
     return this.prisma.link.findMany({
       where: { userId: this.placeholderUserId },

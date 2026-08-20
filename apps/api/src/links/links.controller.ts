@@ -29,9 +29,15 @@ export class LinksController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<Link[]> {
+    const parsedPage = page ? Number(page) : undefined;
+    const parsedLimit = limit ? Number(limit) : undefined;
     return this.linksService.findAll(
-      page ? Number(page) : undefined,
-      limit ? Number(limit) : undefined,
+      parsedPage !== undefined && Number.isFinite(parsedPage)
+        ? parsedPage
+        : undefined,
+      parsedLimit !== undefined && Number.isFinite(parsedLimit)
+        ? parsedLimit
+        : undefined,
     );
   }
 
