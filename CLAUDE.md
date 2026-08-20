@@ -25,7 +25,7 @@ link-shortener/
 - **ORM**: Prisma (PostgreSQL)
 - **Database**: PostgreSQL 16 (in docker-compose)
 - **Schema**: `apps/api/prisma/schema.prisma` — single source of truth for data models
-- **Modules**: `prisma` (global), `health`, `auth` (placeholder), `users`, `links`, `redirect`, `analytics`
+- **Modules**: `prisma` (global), `health`, `auth` (Google OAuth + JWT, Stage 4), `users`, `links`, `redirect`, `analytics`
 - **Port**: 4000 (via `process.env.PORT ?? 4000`)
 - **CORS**: Enabled for `http://localhost:5173` and `http://localhost:3000`
 
@@ -193,7 +193,7 @@ components/ui/   # shadcn/ui & other reusable components (buttons, cards, dialog
 features/         # Feature-level logic (links, analytics, auth)
   ├── links/      # useLinks hook, CreateLinkForm, LinksList
   ├── analytics/  # Chart components, useAnalytics hook
-  └── auth/       # useCurrentUser, AuthGuard, LoginPage
+  └── auth/       # LoginPage, AuthCallback, AuthGuard
 lib/              # Utilities (api-client, query-client, helpers)
 stores/           # Zustand stores (auth.store.ts only, no data stores)
 ```
@@ -266,6 +266,11 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 - **CORS errors**: Verify CORS is enabled in `apps/api/src/main.ts` for `http://localhost:5173`.
 - **Connection refused**: Check backend is running on port 4000: `curl http://localhost:4000/health`.
 
+### Auth (Stage 4)
+- **Backend crashes on startup with "JWT_SECRET is not set"**: intentional (`apps/api/src/auth/jwt-secret.ts`) — the app refuses to start rather than silently signing/verifying tokens with a fallback value. Generate one: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` and put it in `apps/api/.env`.
+- **"Sign in with Google" shows a Google error page instead of the consent screen**: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` aren't set to real values yet — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`. The rest of the app works fine without them.
+- **`uvx`/`pip` not available**: this environment has no Python package-manager tooling, so `semgrep-mcp` (originally planned as an MCP server) can't be installed via `uvx`. Use the official Docker image directly instead: `docker run --rm -v "$(pwd):/src" semgrep/semgrep semgrep scan --config=auto /src/apps/api/src /src/apps/web/src` — this is what `.claude/agents/security-reviewer.md` does.
+
 ## Links & References
 
 - [Prisma Docs](https://www.prisma.io/docs/)
@@ -284,7 +289,9 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 3 (Frontend)**: ✅ Done — Dashboard with create-link form (react-hook-form + zod, shared validation schema now lives in `packages/shared-types`), links list (soft-delete aware, copy-to-clipboard), `react-router-dom` v7 routing, shadcn/ui (Radix base). `Link` type in `shared-types` fixed to match Prisma's actual nullable-field JSON shape rather than an independently-guessed optional-field shape. See `docs/stage-3-frontend.md` for full details.
 
-**Stages 4–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 4 (Authentication)**: ✅ Done — Google OAuth + JWT, every `/links` endpoint scoped to the authenticated user, `JwtAuthGuard` + `@CurrentUser()`. Real Google Cloud credentials are the one piece Claude Code can't set up (requires the user's own Google account) — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`; everything else is implemented and verified. App now refuses to start without a real `JWT_SECRET` (`auth/jwt-secret.ts`). `.claude/settings.json` adds a pre-commit `PreToolUse` hook (lint+test gate on `git commit`). See `docs/stage-4-authentication.md` for full details.
+
+**Stages 5–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 **Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 
