@@ -15,10 +15,10 @@ link-shortener/
 │   ├── api/       # NestJS backend, TypeScript strict mode
 │   └── web/       # Vite + React frontend, TypeScript strict mode
 ├── packages/
-│   ├── shared-types/    # Common TS types & DTOs (zod schemas + class-validator)
-│   ├── eslint-config/   # Shared ESLint flat config (future)
-│   └── tsconfig/        # Shared TypeScript configs (future)
+│   └── shared-types/    # Common TS types & DTOs (zod schemas + class-validator)
 ```
+
+`packages/eslint-config` and `packages/tsconfig` (shared configs across workspaces) are a possible future addition, not created yet — each app currently has its own lint/tsconfig setup.
 
 ### Backend (apps/api)
 - **Framework**: NestJS (latest)
@@ -32,8 +32,8 @@ link-shortener/
 Key dependencies:
 - `@nestjs/config` — environment management
 - `@nestjs/terminus` — health checks
-- `@prisma/client` — type-safe DB access
-- `prisma` — CLI & migrations
+- `@prisma/client` / `prisma` — **pinned to v6** (`^6.0.0`), not v7. v7 moved `datasource.url` out of `schema.prisma` into a separate `prisma.config.ts` and broke `prisma migrate dev` without it — not worth the complexity for this project. Do not upgrade without a deliberate reason.
+- `class-validator` / `class-transformer` — required peer deps for Nest's `ValidationPipe` (used in `main.ts`); not installed by the Nest CLI scaffold by default, must be added explicitly.
 - `@nestjs/axios` — HTTP client
 
 ### Frontend (apps/web)
@@ -138,8 +138,8 @@ PORT=4000
 ```
 
 #### Frontend
-- No `.env` for dev (Vite proxies API on :4000 via vite.config.ts, future)
-- Environment variables for build-time config (e.g., `VITE_API_URL`) go in `apps/web/.env`
+- No `.env` needed for dev — `vite.config.ts` proxies `/api/*` requests to `http://localhost:4000` (prefix stripped before forwarding), so the browser only ever talks to `:5173`.
+- Environment variables for build-time config (e.g., `VITE_API_URL`) go in `apps/web/.env` if/when needed.
 
 ### Scripts (pnpm commands)
 
@@ -162,7 +162,7 @@ PORT=4000
 **Frontend** (`pnpm --filter web`):
 - `pnpm --filter web dev` — Start Vite dev server (:5173)
 - `pnpm --filter web build` — Build Vite bundle (dist/)
-- `pnpm --filter web test` — Run Vitest unit tests
+- `pnpm --filter web test` — Run Vitest unit tests (**not installed yet** — Vitest/RTL setup happens in Stage 6, `docs/stage-6-testing-qa.md`; no `test` script exists in `apps/web/package.json` until then)
 - `pnpm --filter web lint` — Lint (oxlint by default)
 
 ## Code Conventions & Patterns
@@ -240,47 +240,7 @@ index.ts          # All exported types: Link, Click, User, CreateLinkRequest, Li
 
 ## Claude Code Learning Path
 
-This project is structured to progressively introduce Claude Code features:
-
-### Stage 1: Initialization (current)
-- **Topics**: plan mode, CLAUDE.md / project rules, git initialization
-- **Tools**: Bash, git, file creation (no agents yet)
-- **Outcome**: Working monorepo skeleton, postgres running, both dev servers start
-
-### Stage 2: Backend Core
-- **Topics**: custom slash-commands (e.g., `/gen-nest-crud`), skills, MCP servers (PostgreSQL)
-- **Implement**: Links CRUD endpoints, redirect tracking
-- **Outcome**: Fully functional `/api/links` and `/:code` redirects
-
-### Stage 3: Frontend
-- **Topics**: different subagent types (Explore, Plan, custom), MCP claude-in-chrome (visual testing)
-- **Implement**: Dashboard, link list, create link form
-- **Outcome**: Clickable UI with API integration
-
-### Stage 4: Authentication
-- **Topics**: hooks (lint/test on pre-commit), custom security-focused subagents
-- **Implement**: Google OAuth flow, JWT middleware, per-user link isolation
-- **Outcome**: Multi-user support, auth guards on endpoints
-
-### Stage 5: Analytics
-- **Topics**: agent teams (backend aggregation + frontend charts coordinated), dynamic workflows
-- **Implement**: Click aggregation queries, UA parsing, dashboard charts
-- **Outcome**: Rich analytics views per link
-
-### Stage 6: Testing & QA
-- **Topics**: dynamic workflows (multi-file test generation), agent view (monitor parallel test runs), `/loop` (iterate fixes)
-- **Implement**: Comprehensive unit & component tests, E2E tests (Playwright)
-- **Outcome**: >80% code coverage, all CI checks passing
-
-### Stage 7: CI/CD
-- **Topics**: GitHub Actions, MCP GitHub, scheduled/cron agents
-- **Implement**: GitHub Actions workflows (lint, test, build, deploy)
-- **Outcome**: Automated validation on push
-
-### Stage 8: Polish
-- **Topics**: Artifacts for documentation, status-line customization
-- **Implement**: README updates, API docs, deployment guide
-- **Outcome**: Production-ready, documentedcode
+This project is a learning vehicle for Claude Code features, structured as 8 stages (initialization → backend → frontend → auth → analytics → testing → CI/CD → polish). Full roadmap, per-stage topics, detailed implementation plans and current status live in **`docs/plan.md`** (overview + status table) and **`docs/stage-N-*.md`** (one detailed file per stage) — read those instead of duplicating them here.
 
 ## Debugging & Troubleshooting
 
@@ -291,6 +251,10 @@ This project is structured to progressively introduce Claude Code features:
 ### Prisma / Database
 - **"column does not exist"**: Run `pnpm --filter api exec prisma migrate dev` to apply pending migrations.
 - **Reset database**: `pnpm --filter api exec prisma migrate reset` (destructive — dev only).
+- **`prisma migrate dev` fails with a `datasource.url`/`prisma.config.ts` error**: you're on Prisma v7 by accident. This project pins v6 — check `apps/api/package.json`.
+
+### Backend won't start: "The class-validator package is missing"
+- `ValidationPipe` in `main.ts` needs `class-validator` + `class-transformer` as peer deps. Nest CLI doesn't install them by default: `pnpm --filter api add class-validator class-transformer`.
 
 ### Frontend build
 - **Module not found errors**: Ensure `workspace:*` protocol resolves correctly for `@link-shortener/shared-types`.
@@ -312,17 +276,9 @@ This project is structured to progressively introduce Claude Code features:
 
 ## Project Status
 
-**Stage 1 (Initialization)**: ✅ In progress
-- [x] Git repo initialized
-- [x] Monorepo structure (pnpm + Turborepo)
-- [x] Backend scaffold (NestJS + Prisma)
-- [x] Frontend scaffold (Vite + React)
-- [x] Docker setup (PostgreSQL)
-- [x] CLAUDE.md & docs/plan.md
-- [ ] Verify all dev servers start
-- [ ] First git commit
+**Stage 1 (Initialization)**: ✅ Done — monorepo skeleton, both dev servers verified working, `GET /health` returns `200` with DB status, first commits pushed.
 
-**Stages 2–8**: Roadmap in `docs/plan.md`
+**Stages 2–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 ---
 

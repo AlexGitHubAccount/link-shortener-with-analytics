@@ -1,8 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-allowBuilds:
-  '@prisma/client': set this to true or false
-  '@prisma/engines': set this to true or false
-  prisma: set this to true or false
-  unrs-resolver: set this to true or false
+# Build-script approval for prisma/unrs-resolver is handled by .pnpmfile.cjs (pkg.pnpm.allowBuild),
+# not here — this file previously had a broken placeholder `allowBuilds` block (literal
+# "set this to true or false" strings instead of real booleans) left over from an
+# interrupted `pnpm approve-builds` run.

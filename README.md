@@ -10,12 +10,11 @@ link-shortener/
 │   ├── api/       # NestJS backend
 │   └── web/       # Vite + React frontend
 ├── packages/
-│   ├── shared-types/   # Common TS types & DTOs
-│   ├── eslint-config/
-│   └── tsconfig/
+│   └── shared-types/   # Common TS types & DTOs
 ├── docker-compose.yml  # PostgreSQL for local dev
 └── docs/
-    └── plan.md         # Roadmap and architecture
+    ├── plan.md         # Roadmap, architecture, links to stage docs
+    └── stage-N-*.md    # Detailed plan + outcome for each stage
 ```
 
 ## Quick Start
@@ -32,22 +31,29 @@ link-shortener/
    pnpm install
    ```
 
-2. **Start PostgreSQL** (in docker-compose)
+2. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   cp apps/api/.env.example apps/api/.env
+   ```
+   Defaults work as-is for local dev — no edits needed unless you changed ports/credentials.
+
+3. **Start PostgreSQL** (in docker-compose)
    ```bash
    docker compose up -d postgres
    ```
 
-3. **Initialize database** (Prisma migrations)
+4. **Initialize database** (Prisma migrations)
    ```bash
    pnpm --filter api exec prisma migrate dev --name init
    ```
 
-4. **Run dev servers** (backend on :4000, frontend on :5173)
+5. **Run dev servers** (backend on :4000, frontend on :5173)
    ```bash
    pnpm dev
    ```
 
-5. **Check health**
+6. **Check health**
    ```bash
    curl http://localhost:4000/health
    # open http://localhost:5173 in browser

@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 .pnpm/
-pnpm-lock.yaml
+# pnpm-lock.yaml is intentionally committed — needed for reproducible installs and CI caching (Stage 7)
 package-lock.json
 yarn.lock
 
