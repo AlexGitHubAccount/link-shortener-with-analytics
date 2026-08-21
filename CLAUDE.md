@@ -251,7 +251,7 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 ## Debugging & Troubleshooting
 
 ### pnpm issues
-- **"Ignored build scripts"**: Prisma requires approval to run build scripts. Use `pnpm approve-builds` or ignore (warning only).
+- **"Ignored build scripts"**: locally this is only a warning (safe to ignore), but `pnpm install --frozen-lockfile` on a fresh CI runner treats it as a **hard error** (exit 1) — confirmed by Stage 7's first real GitHub Actions run. The fix is `allowBuilds: {packageName: true, ...}` in `pnpm-workspace.yaml` (pnpm 11's real mechanism — not `onlyBuiltDependencies`, that's the pnpm ≤10 name and pnpm 11 silently ignores it with no error). If you ever see pnpm auto-inject a broken `allowBuilds:` block with literal `"set this to true or false"` placeholder strings into that file, that's pnpm itself trying to prompt without a TTY — replace the placeholders with real `true`/`false`, don't just delete the block.
 - **Lockfile conflicts**: `pnpm install` should auto-resolve.
 
 ### Prisma / Database
@@ -279,6 +279,8 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 ### Testing / E2E (Stage 6)
 - **`psql -v var=value -c "... :'var' ..."` errors with a syntax error at `:`**: `psql`'s `:'var'` variable substitution only runs on SQL read via stdin/script/interactive input, NOT on the `-c` argument itself (confirmed directly against psql 16.15 — identical query piped via stdin works fine). Use `execFileSync('psql', [...], { input: sql })` instead of `-c`, see `apps/e2e/tests/auth-helper.ts`.
+- **E2E fails in CI with "No such container: link-shortener-db" but passes locally**: `auth-helper.ts` originally ran `psql` via `docker exec` into the local dev machine's docker-compose container by name — that container doesn't exist in GitHub Actions (the `services:` Postgres container has a different, internal name). Fixed (Stage 7) by running `psql` via `docker run --network host postgres:16-alpine` connecting to `localhost:5432` directly — works identically local/CI without depending on a container name or a host-installed `psql` binary.
+- **`web:type-check` fails only in CI/a fresh clone with "Cannot find module '@link-shortener/shared-types'"**: `turbo.json`'s `type-check` task needs `dependsOn: ["^build"]` (like `dev`/`build`/`test:e2e` already have) — `web` resolves that workspace package against its built `dist/`, not `src/`. Stays invisible locally once `dist/` exists from any earlier `pnpm dev`/`build` run; a genuinely fresh checkout has none.
 - **`playwright install --with-deps` fails ("sudo: a password is required")**: no root access in this environment. Run `npx playwright install chromium` without the flag — downloads just the browser binary, which runs fine without the system libs `--with-deps` would otherwise apt-install.
 - **`pnpm --filter web test` errors "no such script"**: make sure you're not on an old checkout from before Stage 6 — `apps/web/package.json` didn't have a `test` script until then despite `CLAUDE.md`/`docs/plan.md` referencing Vitest since Stage 1.
 
@@ -306,7 +308,7 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 6 (Testing/QA)**: ✅ Done — 63 backend Jest tests + 37 frontend Vitest tests + 2 Playwright E2E scenarios, all green. Coverage 80%+ on all four metrics in both `api` and `web` (`test:cov` scripts). Most unit tests generated via a new Dynamic Workflow (`.claude/workflows/generate-tests.js`) with independent peer verification per file. New `apps/e2e` workspace. Full-codebase Semgrep sweep tightened `CreateLinkDto`'s URL protocol allowlist (http/https only). See `docs/stage-6-testing-qa.md` for full details.
 
-**Stage 7 (CI/CD)**: 🟡 Prepared, waiting on user confirmation — `.github/workflows/{ci,e2e}.yml` written and locally dry-run-verified (exact CI command sequence run by hand, clean). The one thing Claude Code can't do autonomously: the actual `gh repo create ... --push` (irreversible, outward-facing — needs explicit go-ahead, same category as the Google OAuth credentials gap). See `docs/stage-7-cicd.md` for the exact command and current status.
+**Stage 7 (CI/CD)**: 🟡 Published, CI/CD green, waiting on `/stage-review 7` — repo published to GitHub (`github.com/AlexGitHubAccount/link-shortener-with-analytics`, private, personal account) after explicit user confirmation, `.github/workflows/{ci,e2e}.yml` verified green on real GitHub Actions runs (4 CI-only failures found and fixed along the way — see `docs/stage-7-cicd.md`). See `docs/stage-7-cicd.md` for full details and remaining manual steps (branch protection).
 
 **Stage 8**: Not started (depends on Stage 7 completing first). Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
