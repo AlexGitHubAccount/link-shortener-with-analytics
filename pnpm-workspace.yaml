@@ -1,7 +1,30 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-# Build-script approval for prisma/unrs-resolver is handled by .pnpmfile.cjs (pkg.pnpm.allowBuild),
-# not here — this file previously had a broken placeholder `allowBuilds` block (literal
-# "set this to true or false" strings instead of real booleans) left over from an
-# interrupted `pnpm approve-builds` run.
+# Build-script approval — pnpm 11 refuses to run postinstall scripts for these deps unless
+# explicitly allowlisted here (a supply-chain safety default: `pnpm install` prints only a
+# warning locally, but `pnpm install --frozen-lockfile` in CI treats it as a hard error, exit
+# code 1 — found via the first real GitHub Actions run in Stage 7).
+#
+# The key is `allowBuilds` (object of packageName -> boolean), NOT `onlyBuiltDependencies`
+# (that's the pnpm <=10 name — pnpm 11 silently ignores it with no error, which cost real time
+# to debug here). Confirmed by pnpm's own behavior: when it hits ignored builds with no
+# interactive TTY, it auto-injects an `allowBuilds:` block into this exact file with placeholder
+# string values ("set this to true or false") instead of prompting — that's how the correct key
+# name was actually discovered. If you ever see that placeholder block reappear (e.g. after
+# running a bare `pnpm install` locally with no flags), it means real booleans got wiped —
+# restore explicit `true`/`false` values here, never leave the placeholder strings.
+#
+# Previously this project tried approving builds via `.pnpmfile.cjs`'s readPackage hook setting
+# `pkg.pnpm.allowBuild` on each dependency's own manifest — that never worked either, because
+# pnpm only honors an allowlist declared by the ROOT project (here), not a package self-declaring
+# itself trusted (which would defeat the point of the check).
+#
+# Always verify with `pnpm install --frozen-lockfile` (the exact CI invocation) after editing
+# this block, and check the real exit code directly (`echo $?` right after the bare command,
+# not through a `| tail` pipe — that reports tail's exit code instead of pnpm's).
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  unrs-resolver: true
