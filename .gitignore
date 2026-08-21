@@ -41,6 +41,12 @@ pids/
 coverage/
 .nyc_output/
 
+# Playwright
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+apps/e2e/blob-report/
+apps/e2e/.cache/
+
 # Misc
 .cache/
 .eslintcache
