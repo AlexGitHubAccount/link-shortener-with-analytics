@@ -5,6 +5,10 @@
 
 Educational monorepo project for learning Claude Code: link shortener generator with detailed analytics (click tracking, referrer analysis, User-Agent parsing).
 
+## Demo
+
+![Create a link, follow it, see the click land in analytics](./docs/assets/link-shortener-demo.gif)
+
 ## Project Structure
 
 ```
@@ -64,6 +68,8 @@ link-shortener/
    curl http://localhost:4000/health
    # open http://localhost:5173 in browser
    ```
+
+7. **Browse the API docs** (optional) — `http://localhost:4000/api/docs` (Swagger UI, generated from the actual DTOs/controllers)
 
 ## Scripts
 
