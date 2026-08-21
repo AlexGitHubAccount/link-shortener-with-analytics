@@ -15,10 +15,12 @@
       "cache": true
     },
     "test": {
-      "cache": true
+      "cache": true,
+      "dependsOn": ["^build"]
     },
     "test:cov": {
       "cache": true,
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
     "test:e2e": {

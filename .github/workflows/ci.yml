@@ -45,7 +45,7 @@ jobs:
         run: pnpm type-check
 
       - name: Unit tests (with coverage)
-        run: pnpm --filter api test:cov && pnpm --filter web test:cov
+        run: pnpm exec turbo run test:cov --filter=api --filter=web
 
       - name: Build
         run: pnpm build
