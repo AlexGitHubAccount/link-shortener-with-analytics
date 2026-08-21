@@ -291,7 +291,9 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 4 (Authentication)**: ✅ Done — Google OAuth + JWT, every `/links` endpoint scoped to the authenticated user, `JwtAuthGuard` + `@CurrentUser()`. Real Google Cloud credentials are the one piece Claude Code can't set up (requires the user's own Google account) — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`; everything else is implemented and verified. App now refuses to start without a real `JWT_SECRET` (`auth/jwt-secret.ts`). `.claude/settings.json` adds a pre-commit `PreToolUse` hook (lint+test gate on `git commit`). See `docs/stage-4-authentication.md` for full details.
 
-**Stages 5–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 5 (Analytics)**: ✅ Done — `GET /links/:id/analytics` (owner-scoped), `ua-parser-js`-based UA parsing on every click, 30-day zero-filled click chart, top-5 referrers, device breakdown pie chart. Built via two parallel `Agent`-tool dispatches against the already-fixed `LinkAnalytics` shared-types contract (substituting for the plan's "Agent teams" topic, which needs explicit enablement not attempted during an unsupervised overnight run). See `docs/stage-5-analytics.md` for full details.
+
+**Stages 6–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 **Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 
