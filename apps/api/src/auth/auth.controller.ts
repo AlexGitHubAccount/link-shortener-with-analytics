@@ -9,6 +9,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '@link-shortener/shared-types';
 import { UsersService } from '../users/users.service';
@@ -17,6 +18,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { GoogleProfile } from './strategies/google.strategy';
 import type { JwtPayload } from './strategies/jwt.strategy';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -28,6 +30,11 @@ export class AuthController {
   // Frontend calls this right after picking up the token from the callback redirect, to get
   // real user info (email/displayName/avatarUrl) for the auth store rather than trusting an
   // unverified client-side JWT decode - the token IS verified here, server-side, by JwtAuthGuard.
+  @ApiOperation({
+    summary:
+      'Get the current authenticated user (verifies the bearer JWT server-side)',
+  })
+  @ApiBearerAuth()
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() userId: string): Promise<AuthUser> {
@@ -45,10 +52,18 @@ export class AuthController {
 
   // Passport's AuthGuard('google') intercepts this request and redirects the browser to
   // Google's consent screen before this handler body ever runs.
+  @ApiOperation({
+    summary:
+      'Start Google OAuth login - redirects to the Google consent screen',
+  })
   @Get('google')
   @UseGuards(AuthGuard('google'))
   googleAuth(): void {}
 
+  @ApiOperation({
+    summary:
+      "Google's OAuth callback - issues a JWT, redirects to the frontend with it in the URL fragment",
+  })
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthCallback(

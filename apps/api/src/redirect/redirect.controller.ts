@@ -7,12 +7,14 @@ import {
   Param,
   Redirect,
 } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { LinksService } from '../links/links.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 // Deliberately its own module/controller, not part of LinksModule's CRUD surface:
 // this is the highest-traffic path in the app and must never depend on future
 // auth-guard checks the way the private /links endpoints will (Stage 4).
+@ApiTags('redirect')
 @Controller()
 export class RedirectController {
   constructor(
@@ -20,6 +22,22 @@ export class RedirectController {
     private readonly analyticsService: AnalyticsService,
   ) {}
 
+  // Documented (not @ApiExcludeEndpoint'd) despite being a real 302 rather than a JSON
+  // response - Swagger UI's "Try it out" won't follow the redirect usefully, but this is still
+  // a real public endpoint of the API that consumers/tooling should see listed.
+  @ApiOperation({
+    summary:
+      'Public redirect by short code - increments click analytics as a side effect',
+  })
+  @ApiResponse({
+    status: 302,
+    description: "Redirects to the link's original URL",
+  })
+  @ApiResponse({ status: 404, description: 'No link exists for this code' })
+  @ApiResponse({
+    status: 410,
+    description: 'Link is inactive or past its expiry date',
+  })
   @Get(':code')
   @Redirect()
   async redirect(

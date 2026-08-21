@@ -1,4 +1,5 @@
 import { IsOptional, IsString, IsUrl, Length, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLinkDto {
   // require_protocol + an explicit http/https allowlist (validator.js's default also permits
@@ -7,10 +8,20 @@ export class CreateLinkDto {
   // nestjs-open-redirect rule flags this pattern - accepted by design, see
   // docs/stage-6-testing-qa.md's Semgrep section for the full reasoning), so the mitigation
   // here is protocol allowlisting, not blocking dynamic redirects altogether.
+  @ApiProperty({
+    example: 'https://example.com/some/long/path',
+    description: 'Must be http(s) with an explicit protocol',
+  })
   @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   originalUrl!: string;
 
   // If omitted, LinksService generates a random URL-safe code via nanoid.
+  @ApiPropertyOptional({
+    example: 'my-link',
+    minLength: 3,
+    maxLength: 20,
+    description: 'Letters and digits only. Random if omitted.',
+  })
   @IsOptional()
   @IsString()
   @Length(3, 20)
@@ -19,6 +30,7 @@ export class CreateLinkDto {
   })
   customCode?: string;
 
+  @ApiPropertyOptional({ example: 'My homepage' })
   @IsOptional()
   @IsString()
   title?: string;

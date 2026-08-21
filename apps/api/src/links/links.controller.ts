@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Link } from '@prisma/client';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { LinksService } from './links.service';
@@ -18,11 +19,14 @@ import { UpdateLinkDto } from './dto/update-link.dto';
 
 // Every route here requires a valid JWT (see JwtAuthGuard/JwtStrategy) and is scoped to the
 // requesting user via @CurrentUser() - RedirectController is the one public exception.
+@ApiTags('links')
+@ApiBearerAuth()
 @Controller('links')
 @UseGuards(JwtAuthGuard)
 export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
+  @ApiOperation({ summary: 'Create a short link owned by the current user' })
   @Post()
   create(
     @CurrentUser() userId: string,
@@ -31,6 +35,7 @@ export class LinksController {
     return this.linksService.create(userId, dto);
   }
 
+  @ApiOperation({ summary: "List the current user's links, newest first" })
   @Get()
   findAll(
     @CurrentUser() userId: string,
@@ -44,6 +49,9 @@ export class LinksController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Get a single link by id (404 if not owned by the current user)',
+  })
   @Get(':id')
   findOne(
     @CurrentUser() userId: string,
@@ -52,6 +60,7 @@ export class LinksController {
     return this.linksService.findOne(userId, id);
   }
 
+  @ApiOperation({ summary: "Update a link's title/active flag/expiry" })
   @Patch(':id')
   update(
     @CurrentUser() userId: string,
@@ -61,6 +70,7 @@ export class LinksController {
     return this.linksService.update(userId, id, dto);
   }
 
+  @ApiOperation({ summary: 'Soft-delete a link' })
   @Delete(':id')
   remove(
     @CurrentUser() userId: string,

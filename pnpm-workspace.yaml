@@ -26,5 +26,9 @@ packages:
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
+  # @scarf/scarf (pulled in by swagger-ui-dist, a @nestjs/swagger dependency, added Stage 8) is
+  # a telemetry-only postinstall script - pings scarf.sh with an anonymous download counter, no
+  # functional purpose. Denied deliberately, not left as an oversight.
+  '@scarf/scarf': false
   prisma: true
   unrs-resolver: true

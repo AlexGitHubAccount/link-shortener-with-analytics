@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { HealthCheckService, HealthCheck } from '@nestjs/terminus';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { HealthStatus } from '@link-shortener/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 
+@ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(
@@ -10,6 +12,9 @@ export class HealthController {
     private prisma: PrismaService,
   ) {}
 
+  @ApiOperation({
+    summary: 'Readiness check - backend + database connectivity',
+  })
   @Get()
   @HealthCheck()
   async check(): Promise<HealthStatus> {
