@@ -88,7 +88,7 @@ const results = await pipeline(
     return {
       file: target.file,
       testFile: target.testFile,
-      status: reverdict.ranSuccessfully && reverdict.meaningful ? 'fixed' : 'still-failing',
+      status: reverdict?.ranSuccessfully && reverdict?.meaningful ? 'fixed' : 'still-failing',
       verdict: reverdict,
     };
   },
