@@ -8,7 +8,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: 'list',
+  // 'list' locally (fast, no report dir to clean up); 'html' on CI so a failure has an
+  // uploadable report - see .github/workflows/e2e.yml's "Upload Playwright report" step.
+  reporter: process.env.CI ? [['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',

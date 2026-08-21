@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch/PR - a new push makes the previous run's result
+# irrelevant, no point burning CI minutes finishing it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-type-test-build:
+    runs-on: ubuntu-latest
+    # No Postgres service here - backend unit tests mock PrismaService entirely (Stage 6),
+    # never hit a real database. Only e2e.yml needs a live Postgres.
+    env:
+      # prisma generate reads DATABASE_URL from schema.prisma's env("DATABASE_URL") but never
+      # connects during generate (only migrate/db push do) - any well-formed value is enough.
+      DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter api exec prisma generate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm type-check
+
+      - name: Unit tests (with coverage)
+        run: pnpm --filter api test:cov && pnpm --filter web test:cov
+
+      - name: Build
+        run: pnpm build

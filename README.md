@@ -1,5 +1,10 @@
 # Link Shortener with Analytics
 
+<!-- TODO(stage-7): replace <owner>/<repo> once the repository is actually published to GitHub
+     (docs/stage-7-cicd.md step 0) - these badge URLs are placeholders until then. -->
+[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
+[![E2E](https://github.com/<owner>/<repo>/actions/workflows/e2e.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/e2e.yml)
+
 Educational monorepo project for learning Claude Code: link shortener generator with detailed analytics (click tracking, referrer analysis, User-Agent parsing).
 
 ## Project Structure

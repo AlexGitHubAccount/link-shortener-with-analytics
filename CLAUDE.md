@@ -306,7 +306,9 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 6 (Testing/QA)**: ✅ Done — 63 backend Jest tests + 37 frontend Vitest tests + 2 Playwright E2E scenarios, all green. Coverage 80%+ on all four metrics in both `api` and `web` (`test:cov` scripts). Most unit tests generated via a new Dynamic Workflow (`.claude/workflows/generate-tests.js`) with independent peer verification per file. New `apps/e2e` workspace. Full-codebase Semgrep sweep tightened `CreateLinkDto`'s URL protocol allowlist (http/https only). See `docs/stage-6-testing-qa.md` for full details.
 
-**Stages 7–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 7 (CI/CD)**: 🟡 Prepared, waiting on user confirmation — `.github/workflows/{ci,e2e}.yml` written and locally dry-run-verified (exact CI command sequence run by hand, clean). The one thing Claude Code can't do autonomously: the actual `gh repo create ... --push` (irreversible, outward-facing — needs explicit go-ahead, same category as the Google OAuth credentials gap). See `docs/stage-7-cicd.md` for the exact command and current status.
+
+**Stage 8**: Not started (depends on Stage 7 completing first). Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 **Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 
