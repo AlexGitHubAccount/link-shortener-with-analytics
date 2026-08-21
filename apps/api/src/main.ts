@@ -22,24 +22,28 @@ async function bootstrap() {
   );
 
   // Swagger/OpenAPI docs (Stage 8) - reads @ApiProperty/@ApiOperation/@ApiTags annotations on
-  // DTOs and controllers. Left enabled in all environments (including prod) since every
-  // documented endpoint already enforces its own auth guard - the docs UI itself has no
-  // separate access control, matching how NestJS's own quickstart sets it up.
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Link Shortener API')
-    .setDescription(
-      'Link shortening service with click analytics - see /links, /:code (public redirect), /links/:id/analytics, /auth',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, swaggerDocument);
+  // DTOs and controllers. The docs UI/JSON itself has no auth control, so it's only mounted
+  // outside production to avoid exposing the full API schema unauthenticated.
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (!isProduction) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Link Shortener API')
+      .setDescription(
+        'Link shortening service with click analytics - see /links, /:code (public redirect), /links/:id/analytics, /auth',
+      )
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, swaggerDocument);
+  }
 
   const port = process.env.PORT ?? 4000;
   await app.listen(port);
   console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 API docs available at: http://localhost:${port}/api/docs`);
+  if (!isProduction) {
+    console.log(`📚 API docs available at: http://localhost:${port}/api/docs`);
+  }
 }
 
 bootstrap();
