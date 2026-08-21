@@ -99,7 +99,7 @@ ORM — **Prisma v6** (стабильная — v7.9.1 пробовали на �
 | 4 | Аутентификация | Google OAuth, JWT, изоляция данных по пользователю | ✅ Завершён | [stage-4-authentication.md](./stage-4-authentication.md) |
 | 5 | Аналитика | Агрегация кликов, UA-парсинг, графики на странице ссылки | ✅ Завершён | [stage-5-analytics.md](./stage-5-analytics.md) |
 | 6 | Тестирование/QA | Unit + component + E2E тесты, покрытие >80% | ✅ Завершён | [stage-6-testing-qa.md](./stage-6-testing-qa.md) |
-| 7 | CI/CD | **Первый пуш в GitHub** + GitHub Actions: lint/test/build на каждый push/PR | 🟡 Подготовлено, ждёт подтверждения на публикацию | [stage-7-cicd.md](./stage-7-cicd.md) |
+| 7 | CI/CD | **Первый пуш в GitHub** + GitHub Actions: lint/test/build на каждый push/PR | ✅ Завершён | [stage-7-cicd.md](./stage-7-cicd.md) |
 | 8 | Полировка | Swagger-документация, README, финальный отчёт | ⏳ Запланирован | [stage-8-polish.md](./stage-8-polish.md) |
 
 Каждый следующий этап реализуется в отдельной сессии: открываем соответствующий `stage-N-*.md`, при необходимости корректируем детали по факту текущего состояния кода, выполняем, отмечаем статус ✅ и обновляем эту таблицу.
