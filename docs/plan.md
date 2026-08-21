@@ -98,7 +98,7 @@ ORM — **Prisma v6** (стабильная — v7.9.1 пробовали на �
 | 3 | Frontend | Dashboard, форма создания ссылки, список ссылок | ✅ Завершён | [stage-3-frontend.md](./stage-3-frontend.md) |
 | 4 | Аутентификация | Google OAuth, JWT, изоляция данных по пользователю | ✅ Завершён | [stage-4-authentication.md](./stage-4-authentication.md) |
 | 5 | Аналитика | Агрегация кликов, UA-парсинг, графики на странице ссылки | ✅ Завершён | [stage-5-analytics.md](./stage-5-analytics.md) |
-| 6 | Тестирование/QA | Unit + component + E2E тесты, покрытие >80% | ⏳ Запланирован | [stage-6-testing-qa.md](./stage-6-testing-qa.md) |
+| 6 | Тестирование/QA | Unit + component + E2E тесты, покрытие >80% | ✅ Завершён | [stage-6-testing-qa.md](./stage-6-testing-qa.md) |
 | 7 | CI/CD | **Первый пуш в GitHub** + GitHub Actions: lint/test/build на каждый push/PR | ⏳ Запланирован | [stage-7-cicd.md](./stage-7-cicd.md) |
 | 8 | Полировка | Swagger-документация, README, финальный отчёт | ⏳ Запланирован | [stage-8-polish.md](./stage-8-polish.md) |
 

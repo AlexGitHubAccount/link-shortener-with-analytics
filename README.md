@@ -8,7 +8,8 @@ Educational monorepo project for learning Claude Code: link shortener generator 
 link-shortener/
 ├── apps/
 │   ├── api/       # NestJS backend
-│   └── web/       # Vite + React frontend
+│   ├── web/       # Vite + React frontend
+│   └── e2e/       # Playwright E2E tests (Stage 6)
 ├── packages/
 │   └── shared-types/   # Common TS types & DTOs
 ├── docker-compose.yml  # PostgreSQL for local dev
@@ -64,6 +65,9 @@ link-shortener/
 - `pnpm dev` — start dev servers (Nest + Vite, HMR enabled)
 - `pnpm build` — build frontend + backend
 - `pnpm lint` — ESLint across all apps & packages
+- `pnpm test` — unit tests (Jest + Vitest) across all workspaces
+- `pnpm --filter api test:cov` / `pnpm --filter web test:cov` — unit tests with coverage report (80% threshold, both workspaces)
+- `pnpm --filter e2e test:e2e` — Playwright E2E (needs `pnpm dev` + `docker compose up -d postgres` running; first run: `npx playwright install chromium` from `apps/e2e`)
 - `pnpm docker:up` — start PostgreSQL container
 - `pnpm docker:down` — stop PostgreSQL container
 
@@ -85,11 +89,11 @@ See `docs/plan.md` for the full roadmap and stage-by-stage breakdown of which Cl
 - **Frontend**: Vite, React 19+, TypeScript, React Router v7, TanStack Query v5, zustand, shadcn/ui, Tailwind v4, react-hook-form + zod, recharts
 - **Backend**: NestJS, Prisma, PostgreSQL, `@nestjs/config`, `@nestjs/terminus`
 - **DevOps**: pnpm workspaces, Turborepo, Docker Compose, GitHub (future CI/CD)
-- **Testing**: Jest (backend), Vitest + React Testing Library (frontend)
+- **Testing**: Jest (backend), Vitest + React Testing Library (frontend), Playwright (E2E, `apps/e2e/`)
 
 ## Auth & Database
 
-- **Authentication**: Google OAuth (placeholder modules in `apps/api/src/auth/`, implemented at Stage 4)
+- **Authentication**: Google OAuth + JWT (`apps/api/src/auth/`, Stage 4) — every private endpoint scoped to the authenticated user. Real Google Cloud credentials must be supplied by whoever runs this locally (Claude Code can't create them) — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`.
 - **Database**: PostgreSQL in Docker, managed by Prisma migrations
 - **Data models**: User, Link (short links), Click (analytics), User-Agent breakdown
 

@@ -231,12 +231,18 @@ index.ts          # All exported types: Link, Click, User, CreateLinkRequest, Li
 
 - **Backend**: Jest (default with Nest, already in generated package.json)
   - `apps/api/src/**/*.spec.ts`
-  - Run: `pnpm --filter api test`
+  - Run: `pnpm --filter api test` · Coverage: `pnpm --filter api test:cov` (80% threshold on all 4 metrics, set in `apps/api/package.json`'s `jest.coverageThreshold` — excludes `*.module.ts`/`main.ts`/`dto/*.ts`)
 
-- **Frontend**: Vitest + React Testing Library
+- **Frontend**: Vitest + React Testing Library (installed Stage 6 — was documented since Stage 1 but never actually set up until then)
   - `apps/web/src/**/*.test.tsx`
-  - Run: `pnpm --filter web test`
-  - Coverage: `pnpm --filter web test -- --coverage`
+  - Run: `pnpm --filter web test` · Coverage: `pnpm --filter web test:cov` (80% threshold, `apps/web/vitest.config.ts`)
+  - Setup file: `apps/web/src/test/setup.ts` (jest-dom matchers + explicit RTL `cleanup()` registration — `vitest.config.ts` sets `globals: false`, so RTL's auto-cleanup never self-registers)
+
+- **E2E**: Playwright, separate workspace `apps/e2e/` (not `apps/web/e2e/` — kept fully isolated from Vitest config)
+  - `apps/e2e/tests/*.spec.ts`
+  - Run: `pnpm --filter e2e test:e2e` (needs `pnpm dev` + `docker compose up -d postgres` running first)
+  - `apps/e2e/tests/auth-helper.ts` logs in by minting a real JWT (same `JWT_SECRET` the backend verifies) and seeding a matching `User` row via `psql` — no real Google OAuth flow is driven (not available in this environment), but every other line of app code (AuthCallback, `/auth/me`, guards) runs for real
+  - Browser install: `npx playwright install chromium` (no `--with-deps` — needs `sudo`/`apt` for system libs not available in every environment; the browser runs fine without them anyway)
 
 ## Claude Code Learning Path
 
@@ -271,6 +277,11 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 - **"Sign in with Google" shows a Google error page instead of the consent screen**: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` aren't set to real values yet — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`. The rest of the app works fine without them.
 - **`uvx`/`pip` not available**: this environment has no Python package-manager tooling, so `semgrep-mcp` (originally planned as an MCP server) can't be installed via `uvx`. Use the official Docker image directly instead: `docker run --rm -v "$(pwd):/src" semgrep/semgrep semgrep scan --config=auto /src/apps/api/src /src/apps/web/src` — this is what `.claude/agents/security-reviewer.md` does.
 
+### Testing / E2E (Stage 6)
+- **`psql -v var=value -c "... :'var' ..."` errors with a syntax error at `:`**: `psql`'s `:'var'` variable substitution only runs on SQL read via stdin/script/interactive input, NOT on the `-c` argument itself (confirmed directly against psql 16.15 — identical query piped via stdin works fine). Use `execFileSync('psql', [...], { input: sql })` instead of `-c`, see `apps/e2e/tests/auth-helper.ts`.
+- **`playwright install --with-deps` fails ("sudo: a password is required")**: no root access in this environment. Run `npx playwright install chromium` without the flag — downloads just the browser binary, which runs fine without the system libs `--with-deps` would otherwise apt-install.
+- **`pnpm --filter web test` errors "no such script"**: make sure you're not on an old checkout from before Stage 6 — `apps/web/package.json` didn't have a `test` script until then despite `CLAUDE.md`/`docs/plan.md` referencing Vitest since Stage 1.
+
 ## Links & References
 
 - [Prisma Docs](https://www.prisma.io/docs/)
@@ -293,7 +304,9 @@ This project is a learning vehicle for Claude Code features, structured as 8 sta
 
 **Stage 5 (Analytics)**: ✅ Done — `GET /links/:id/analytics` (owner-scoped), `ua-parser-js`-based UA parsing on every click, 30-day zero-filled click chart, top-5 referrers, device breakdown pie chart. Built via two parallel `Agent`-tool dispatches against the already-fixed `LinkAnalytics` shared-types contract (substituting for the plan's "Agent teams" topic, which needs explicit enablement not attempted during an unsupervised overnight run). See `docs/stage-5-analytics.md` for full details.
 
-**Stages 6–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
+**Stage 6 (Testing/QA)**: ✅ Done — 63 backend Jest tests + 37 frontend Vitest tests + 2 Playwright E2E scenarios, all green. Coverage 80%+ on all four metrics in both `api` and `web` (`test:cov` scripts). Most unit tests generated via a new Dynamic Workflow (`.claude/workflows/generate-tests.js`) with independent peer verification per file. New `apps/e2e` workspace. Full-codebase Semgrep sweep tightened `CreateLinkDto`'s URL protocol allowlist (http/https only). See `docs/stage-6-testing-qa.md` for full details.
+
+**Stages 7–8**: Not started. Full roadmap, detailed per-stage plans and live status table in `docs/plan.md`.
 
 **Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
 
