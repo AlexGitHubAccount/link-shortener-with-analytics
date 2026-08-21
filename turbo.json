@@ -17,6 +17,14 @@
     "test": {
       "cache": true
     },
+    "test:cov": {
+      "cache": true,
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
     "type-check": {
       "cache": true
     }

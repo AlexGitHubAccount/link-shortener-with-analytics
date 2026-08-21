@@ -56,7 +56,14 @@ export interface Click {
 // Empty-string optional fields transform to undefined, matching the backend's ValidationPipe
 // (forbidNonWhitelisted:true, but no reject-empty-string) treating "" as "not provided".
 export const createLinkRequestSchema = z.object({
-  originalUrl: z.url('Enter a valid URL, including http:// or https://'),
+  // protocol allowlist matches the backend's CreateLinkDto exactly (@IsUrl({protocols:
+  // ['http','https']})) - both sides accept the same set, so client-side validation never
+  // passes something the server then rejects (see Stage 6's Semgrep sweep / stage-6-testing-qa.md
+  // for why http/https-only, not a broader allowlist).
+  originalUrl: z.url({
+    protocol: /^https?$/,
+    error: 'Enter a valid URL, including http:// or https://',
+  }),
   customCode: z
     .string()
     .regex(/^[a-zA-Z0-9]+$/, 'Only letters and digits allowed')
