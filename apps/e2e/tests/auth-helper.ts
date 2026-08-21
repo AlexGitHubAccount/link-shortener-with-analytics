@@ -44,8 +44,17 @@ export function mintTestJwt(userId: string, email: string): string {
 // development) - a fresh random id/email per test run, never colliding with real or
 // previously-seeded data.
 function seedTestUser(userId: string, email: string): void {
-  const sql = `INSERT INTO "User" (id, "googleId", email, "displayName", "createdAt", "updatedAt") VALUES ('${userId}', 'e2e-${userId}', '${email}', 'E2E Test User', now(), now()) ON CONFLICT (id) DO NOTHING;`;
-  execFileSync('docker', ['exec', '-i', 'link-shortener-db', 'psql', '-U', 'linkshortener', '-d', 'linkshortener', '-c', sql]);
+  // Values are passed as psql variables (-v) and referenced via :'name', which psql quotes
+  // and escapes as SQL string literals - avoids building SQL via raw string interpolation.
+  const sql = `INSERT INTO "User" (id, "googleId", email, "displayName", "createdAt", "updatedAt") VALUES (:'userId', :'googleId', :'email', 'E2E Test User', now(), now()) ON CONFLICT (id) DO NOTHING;`;
+  execFileSync('docker', [
+    'exec', '-i', 'link-shortener-db',
+    'psql', '-U', 'linkshortener', '-d', 'linkshortener',
+    '-v', `userId=${userId}`,
+    '-v', `googleId=e2e-${userId}`,
+    '-v', `email=${email}`,
+    '-c', sql,
+  ]);
 }
 
 // Logs the page in by driving the SAME code path the frontend uses after a real OAuth
