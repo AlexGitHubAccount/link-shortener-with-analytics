@@ -1,9 +1,7 @@
 # Link Shortener with Analytics
 
-<!-- TODO(stage-7): replace <owner>/<repo> once the repository is actually published to GitHub
-     (docs/stage-7-cicd.md step 0) - these badge URLs are placeholders until then. -->
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
-[![E2E](https://github.com/<owner>/<repo>/actions/workflows/e2e.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/e2e.yml)
+[![CI](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/ci.yml)
+[![E2E](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/e2e.yml/badge.svg)](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/e2e.yml)
 
 Educational monorepo project for learning Claude Code: link shortener generator with detailed analytics (click tracking, referrer analysis, User-Agent parsing).
 
@@ -32,8 +30,10 @@ link-shortener/
 
 ### Setup
 
-1. **Install dependencies**
+1. **Clone the repository and install dependencies**
    ```bash
+   git clone git@github.com:AlexGitHubAccount/link-shortener-with-analytics.git
+   cd link-shortener-with-analytics
    pnpm install
    ```
 
@@ -93,7 +93,7 @@ See `docs/plan.md` for the full roadmap and stage-by-stage breakdown of which Cl
 
 - **Frontend**: Vite, React 19+, TypeScript, React Router v7, TanStack Query v5, zustand, shadcn/ui, Tailwind v4, react-hook-form + zod, recharts
 - **Backend**: NestJS, Prisma, PostgreSQL, `@nestjs/config`, `@nestjs/terminus`
-- **DevOps**: pnpm workspaces, Turborepo, Docker Compose, GitHub (future CI/CD)
+- **DevOps**: pnpm workspaces, Turborepo, Docker Compose, GitHub Actions CI/CD (`.github/workflows/`)
 - **Testing**: Jest (backend), Vitest + React Testing Library (frontend), Playwright (E2E, `apps/e2e/`)
 
 ## Auth & Database

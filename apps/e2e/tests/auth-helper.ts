@@ -53,12 +53,25 @@ function seedTestUser(userId: string, email: string): void {
   // `-c "SELECT :'x'"` errors with "syntax error at or near \":\"" even with -v set, while the
   // exact same query piped via stdin substitutes correctly). So the SQL must be piped in via
   // `input`, not passed as a `-c` argument.
+  //
+  // Runs `psql` via the official postgres:16-alpine Docker image with `--network host` rather
+  // than `docker exec` into a hardcoded container name (link-shortener-db, the local
+  // docker-compose service name). That name doesn't exist in CI - GitHub Actions' `services:`
+  // container has an internal random name, not "link-shortener-db" - and this exact mismatch
+  // broke the first real GitHub Actions E2E run (Stage 7) with "No such container". The
+  // local dev machine has no `psql` binary installed either (confirmed directly - `which psql`
+  // finds nothing), so a plain host-installed-psql fallback wasn't an option. `--network host`
+  // shares the host's network namespace, so `localhost:5432` reaches whichever Postgres is
+  // actually running - the docker-compose container locally, the `services:` container in CI -
+  // without needing to know its container name or whether the host has psql installed at all.
   const sql = `INSERT INTO "User" (id, "googleId", email, "displayName", "createdAt", "updatedAt") VALUES (:'userId', :'googleId', :'email', 'E2E Test User', now(), now()) ON CONFLICT (id) DO NOTHING;`;
   execFileSync(
     'docker',
     [
-      'exec', '-i', 'link-shortener-db',
-      'psql', '-U', 'linkshortener', '-d', 'linkshortener',
+      'run', '--rm', '-i', '--network', 'host',
+      '-e', 'PGPASSWORD=linkshortener',
+      'postgres:16-alpine',
+      'psql', '-h', 'localhost', '-U', 'linkshortener', '-d', 'linkshortener',
       '-v', `userId=${userId}`,
       '-v', `googleId=e2e-${userId}`,
       '-v', `email=${email}`,
