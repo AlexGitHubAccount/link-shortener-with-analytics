@@ -45,16 +45,26 @@ export function mintTestJwt(userId: string, email: string): string {
 // previously-seeded data.
 function seedTestUser(userId: string, email: string): void {
   // Values are passed as psql variables (-v) and referenced via :'name', which psql quotes
-  // and escapes as SQL string literals - avoids building SQL via raw string interpolation.
+  // and escapes as SQL string literals - avoids building SQL via raw string interpolation
+  // (stage-review's security-reviewer flagged the original raw-interpolation version).
+  //
+  // Important: psql's :'var' substitution only runs on SQL it reads via stdin/script/interactive
+  // input, NOT on the argument passed to -c (confirmed directly against this psql 16.15 build -
+  // `-c "SELECT :'x'"` errors with "syntax error at or near \":\"" even with -v set, while the
+  // exact same query piped via stdin substitutes correctly). So the SQL must be piped in via
+  // `input`, not passed as a `-c` argument.
   const sql = `INSERT INTO "User" (id, "googleId", email, "displayName", "createdAt", "updatedAt") VALUES (:'userId', :'googleId', :'email', 'E2E Test User', now(), now()) ON CONFLICT (id) DO NOTHING;`;
-  execFileSync('docker', [
-    'exec', '-i', 'link-shortener-db',
-    'psql', '-U', 'linkshortener', '-d', 'linkshortener',
-    '-v', `userId=${userId}`,
-    '-v', `googleId=e2e-${userId}`,
-    '-v', `email=${email}`,
-    '-c', sql,
-  ]);
+  execFileSync(
+    'docker',
+    [
+      'exec', '-i', 'link-shortener-db',
+      'psql', '-U', 'linkshortener', '-d', 'linkshortener',
+      '-v', `userId=${userId}`,
+      '-v', `googleId=e2e-${userId}`,
+      '-v', `email=${email}`,
+    ],
+    { input: sql },
+  );
 }
 
 // Logs the page in by driving the SAME code path the frontend uses after a real OAuth
