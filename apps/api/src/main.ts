@@ -16,11 +16,13 @@ async function bootstrap() {
   // Baseline security response headers (HSTS, X-Content-Type-Options, no X-Powered-By, etc.) -
   // found missing entirely during a push-gate security-reviewer scope review, added here.
   // Swagger UI at /api/docs needs its CSP relaxed (inline styles/scripts) to actually render -
-  // only loosened in non-production, where it's mounted at all (see below).
+  // disabled ONLY for local dev (NODE_ENV === 'development'). Any other environment, including a
+  // staging/preview deploy running with an unset or non-'production' NODE_ENV, keeps helmet's
+  // default CSP so it is never left without XSS/clickjacking protection.
   app.use(
     helmet({
       contentSecurityPolicy:
-        process.env.NODE_ENV === 'production' ? undefined : false,
+        process.env.NODE_ENV === 'development' ? false : undefined,
     }),
   );
 

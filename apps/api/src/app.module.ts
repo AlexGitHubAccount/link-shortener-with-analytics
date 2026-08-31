@@ -27,6 +27,9 @@ import { AnalyticsModule } from './analytics/analytics.module';
     // dashboard traffic (links/analytics) stays unthrottled. Currently only RedirectController's
     // public GET /:code opts in - it's the one endpoint with no JwtAuthGuard, found unprotected
     // during a push-gate security-reviewer scope review.
+    // Uses the default in-memory storage: counters are per Node process and reset on restart.
+    // Fine for the current single-container deployment; before running more than one API replica,
+    // swap in a shared ThrottlerStorage (e.g. Redis) or the effective limit becomes N x configured.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 30 }]),
     PrismaModule,
     // RedirectModule's GET /:code is a single-segment wildcard that would swallow any other

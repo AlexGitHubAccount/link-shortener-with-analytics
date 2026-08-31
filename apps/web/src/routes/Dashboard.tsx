@@ -25,7 +25,7 @@ export function Dashboard() {
             disabled={isLoggingOut}
             onClick={() => logout()}
           >
-            Sign out
+            {isLoggingOut ? 'Signing out...' : 'Sign out'}
           </Button>
         </div>
       </header>

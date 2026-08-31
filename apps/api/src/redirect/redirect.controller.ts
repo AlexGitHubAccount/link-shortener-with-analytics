@@ -25,6 +25,11 @@ import { AnalyticsService } from '../analytics/analytics.service';
 @Controller()
 @UseGuards(ThrottlerGuard)
 export class RedirectController {
+  // referer/user-agent are unauthenticated, attacker-controlled request headers persisted
+  // verbatim into every Click row. Cap them so a caller can't use the analytics write to stuff
+  // multi-KB strings (up to Node's ~8KB header limit) into the table on each throttled request.
+  private static readonly MAX_HEADER_LEN = 512;
+
   constructor(
     private readonly linksService: LinksService,
     private readonly analyticsService: AnalyticsService,
@@ -63,7 +68,12 @@ export class RedirectController {
     }
 
     // Fire-and-forget: never block or fail the redirect on analytics writes.
-    void this.analyticsService.recordClick(link.id, { referrer, userAgentRaw });
+    const cap = (value?: string) =>
+      value?.slice(0, RedirectController.MAX_HEADER_LEN);
+    void this.analyticsService.recordClick(link.id, {
+      referrer: cap(referrer),
+      userAgentRaw: cap(userAgentRaw),
+    });
 
     return { url: link.originalUrl, statusCode: 302 };
   }
