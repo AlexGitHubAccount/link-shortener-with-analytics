@@ -1,13 +1,13 @@
 # CLAUDE.md: link-shortener-with-analytics
 
-**Purpose**: Educational monorepo project for learning Claude Code capabilities through building a link shortening service with analytics.
+**Назначение**: учебный монорепозиторий для освоения возможностей Claude Code на примере сервиса сокращения ссылок с аналитикой.
 
-## Tech Stack & Architecture
+## Стек и архитектура
 
-### Monorepo Structure
-- **Package manager**: pnpm (corepack-managed)
-- **Monorepo tool**: Turborepo
-- **Workspace**: `pnpm-workspace.yaml` defines `apps/*` and `packages/*`
+### Структура монорепозитория
+- **Пакетный менеджер**: pnpm (через corepack)
+- **Инструмент монорепо**: Turborepo
+- **Workspace**: `pnpm-workspace.yaml` определяет `apps/*` и `packages/*`
 
 ```
 link-shortener/
@@ -15,306 +15,342 @@ link-shortener/
 │   ├── api/       # NestJS backend, TypeScript strict mode
 │   └── web/       # Vite + React frontend, TypeScript strict mode
 ├── packages/
-│   └── shared-types/    # Common TS types & DTOs (zod schemas + class-validator)
+│   └── shared-types/    # Общие TS-типы и DTO (zod-схемы + class-validator)
 ```
 
-`packages/eslint-config` and `packages/tsconfig` (shared configs across workspaces) are a possible future addition, not created yet — each app currently has its own lint/tsconfig setup.
+`packages/eslint-config` и `packages/tsconfig` (общие конфиги на все workspace) — возможное будущее расширение, пока не заведены: каждому приложению пока хватает своего lint/tsconfig.
 
 ### Backend (apps/api)
-- **Framework**: NestJS (latest)
+- **Фреймворк**: NestJS (последняя версия)
 - **ORM**: Prisma (PostgreSQL)
-- **Database**: PostgreSQL 16 (in docker-compose)
-- **Schema**: `apps/api/prisma/schema.prisma` — single source of truth for data models
-- **Modules**: `prisma` (global), `health`, `auth` (Google OAuth + JWT, Stage 4), `users`, `links`, `redirect`, `analytics`
-- **Port**: 4000 (via `process.env.PORT ?? 4000`)
-- **CORS**: Enabled for `http://localhost:5173` and `http://localhost:3000`
+- **База данных**: PostgreSQL 16 (в docker-compose)
+- **Схема**: `apps/api/prisma/schema.prisma` — единственный источник истины по моделям данных
+- **Модули**: `prisma` (глобальный), `health`, `auth` (Google OAuth + JWT, с server-side отзывом токена), `users`, `links`, `redirect`, `analytics`
+- **Порт**: 4000 (через `process.env.PORT ?? 4000`)
+- **CORS**: список origin читается из `ALLOWED_ORIGINS` (env, через запятую), по умолчанию — те же два localhost-адреса для dev. Захардкоженного списка больше нет — на реальном домене без этой переменной API просто отказывал бы фронтенду.
+- **Graceful shutdown**: `app.enableShutdownHooks()` в `main.ts` — без этого `PrismaService.onModuleDestroy()` никогда не срабатывал на `SIGTERM`, соединения к БД не закрывались аккуратно при рестарте контейнера.
+- **Валидация env на старте**: `apps/api/src/config/env.validation.ts` (Joi-схема, подключена через `ConfigModule.forRoot({ validate })`) — некорректная/пропущенная переменная валит приложение сразу, с конкретным сообщением, а не позже как невнятная ошибка в рантайме. `JWT_SECRET` туда намеренно не входит — им отдельно и раньше владеет `jwt-secret.ts` со своим более полезным сообщением, дублировать/конфликтовать с ним не нужно.
 
-Key dependencies:
-- `@nestjs/config` — environment management
-- `@nestjs/terminus` — health checks
-- `@prisma/client` / `prisma` — **pinned to v6** (`^6.0.0`), not v7. v7 moved `datasource.url` out of `schema.prisma` into a separate `prisma.config.ts` and broke `prisma migrate dev` without it — not worth the complexity for this project. Do not upgrade without a deliberate reason.
-- `class-validator` / `class-transformer` — required peer deps for Nest's `ValidationPipe` (used in `main.ts`); not installed by the Nest CLI scaffold by default, must be added explicitly.
-- `@nestjs/axios` — HTTP client
+Ключевые зависимости:
+- `@nestjs/config` — управление окружением
+- `@nestjs/terminus` — health-чеки
+- `@prisma/client` / `prisma` — **закреплены на v6** (`^6.0.0`), не v7. v7 вынесла `datasource.url` из `schema.prisma` в отдельный `prisma.config.ts` и сломала `prisma migrate dev` без него — лишняя сложность для этого проекта. Не обновлять без осознанной причины.
+- `class-validator` / `class-transformer` — обязательные peer-зависимости для Nest `ValidationPipe` (используется в `main.ts`); не ставятся скаффолдом Nest CLI по умолчанию, добавлять явно.
+- `@nestjs/axios` — HTTP-клиент
+- `helmet` — security-заголовки ответа (`app.use(helmet())` в `main.ts`); CSP отключён вне продакшена, иначе ломает Swagger UI на `/api/docs`.
+- `@nestjs/throttler` — rate limiting; зарегистрирован глобально (`ThrottlerModule.forRoot`), но НЕ как глобальный guard — применяется точечно через `@UseGuards(ThrottlerGuard)` на `RedirectController` (единственный эндпоинт без `JwtAuthGuard`) и на `LinksController.create` (более жёсткий лимит — сама точка злоупотребления, не только клик по уже созданной ссылке), чтобы не лимитировать остальной авторизованный dashboard-трафик.
+- `joi` — валидация env на старте (см. выше).
 
 ### Frontend (apps/web)
-- **Framework**: Vite + React 19 + TypeScript
-- **Routing**: react-router-dom v7
-- **State & data**:
-  - Server state: `@tanstack/react-query` v5 (TanStack Query)
-  - Client state: `zustand` (only auth/UI flags, no data)
-- **Forms**: `react-hook-form` + `zod` (schema validation)
-- **Styling**: Tailwind CSS v4 + PostCSS
-- **UI Components**: shadcn/ui (Radix UI base, "Nova" preset — set up in Stage 3 via `pnpm dlx shadcn@latest init -b radix -p nova`)
-- **Charts**: `recharts` (analytics visualization)
-- **Port**: 5173 (Vite dev-server default)
-- **Testing**: Vitest + React Testing Library
+- **Фреймворк**: Vite + React 19 + TypeScript
+- **Роутинг**: react-router-dom v7
+- **Состояние и данные**:
+  - Серверное состояние: `@tanstack/react-query` v5 (TanStack Query)
+  - Клиентское состояние: `zustand` (только auth/UI-флаги, без данных)
+- **Формы**: `react-hook-form` + `zod` (валидация схемой)
+- **Стили**: Tailwind CSS v4 + PostCSS
+- **UI-компоненты**: shadcn/ui (база Radix UI, пресет «Nova» — настроено через `pnpm dlx shadcn@latest init -b radix -p nova`)
+- **Графики**: `recharts` (визуализация аналитики)
+- **Порт**: 5173 (дефолт Vite dev-сервера)
+- **Тестирование**: Vitest + React Testing Library
 
-Key dependencies:
-- `react-router-dom` — client routing
-- `@tanstack/react-query` — server state & caching
-- `react-hook-form` + `zod` — form validation (same zod as backend DTOs)
-- `zustand` — lightweight global state
-- `tailwindcss` + `postcss` + `autoprefixer` — styling
-- `recharts` — charts for analytics dashboard
-- `vitest` + `@testing-library/react` — unit & component testing
+Ключевые зависимости:
+- `react-router-dom` — клиентский роутинг
+- `@tanstack/react-query` — серверное состояние и кэширование
+- `react-hook-form` + `zod` — валидация форм (тот же zod, что и в backend DTO)
+- `zustand` — лёгкое глобальное состояние
+- `tailwindcss` + `postcss` + `autoprefixer` — стили
+- `recharts` — графики для дашборда аналитики
+- `vitest` + `@testing-library/react` — unit- и component-тесты
 
 ### Docker
-- **docker-compose.yml**: PostgreSQL 16 (alpine) only
-- **Volumes**: Named volume `pgdata` for data persistence
-- **Health check**: `pg_isready` with 5s intervals
-- No containers for backend/frontend in dev — they run natively via `pnpm dev` to preserve HMR
 
-## Development Workflow
+**Dev** (`docker-compose.yml`): только PostgreSQL 16 (alpine), именованный volume `pgdata`, health check `pg_isready` каждые 5с. Backend/frontend в dev без контейнеров — запускаются нативно через `pnpm dev`, чтобы сохранить HMR.
 
-### Initial Setup
+**Production-образы** (`apps/api/Dockerfile`, `apps/web/Dockerfile`) — реально собраны и прогнаны сквозь друг друга при добавлении, не только написаны на бумаге:
+- Контекст сборки для ОБОИХ — **корень репозитория**, не `apps/api`/`apps/web` — pnpm workspace нужен целиком (`pnpm-workspace.yaml`, `pnpm-lock.yaml`, манифест целевого пакета + `packages/shared-types`, от которого оба зависят). Обязателен корневой `.dockerignore` — см. грабли ниже.
+  ```bash
+  docker build -f apps/api/Dockerfile -t link-shortener-api .
+  docker build -f apps/web/Dockerfile -t link-shortener-web .
+  ```
+- `apps/api/Dockerfile`: multi-stage (deps → build shared-types + `prisma generate` + `nest build` → runtime). Runtime-стадия копирует ВЕСЬ `node_modules` из build-стадии целиком (включая devDependencies) — сознательный выбор, не недосмотр: попытка вручную собрать «только prod-зависимости», копируя отдельные пути из pnpm-хранилища `.pnpm`, на практике ломает резолвинг модулей (symlink'и pnpm ведут в контент-адресуемое хранилище, копирование части путей рвёт их) — рабочая корректность важнее размера образа на этом масштабе проекта.
+- `apps/web/Dockerfile`: multi-stage (deps → build shared-types + `vite build` → `nginx:1.27-alpine` со статикой). `apps/web/nginx.conf.template` проксирует `/api/*` на бэкенд (`${API_UPSTREAM_URL}`, дефолт `http://api:4000` — под docker-compose/k8s service DNS), с тем же rewrite-правилом, что и dev-прокси Vite (`vite.config.ts`) — срезает префикс `/api` перед пробросом. Публичный редирект (`GET /:code`) сознательно НЕ проксируется — как и в dev, это отдельный, прямой адрес backend'а, не через фронтенд.
+- Оба образа реально собраны, запущены вместе на одной Docker-сети (веб → `api:4000` по имени сервиса) и проверены: статика отдаётся, `/api/health` доходит до реальной Postgres через прокси, graceful shutdown (`docker stop`) завершается с exit code 0.
+- **CD (реальный деплой куда-то) пока не настроен** — нужен выбор платформы (Fly.io/Railway/VPS/что угодно), это решение пользователя, не техническая задача.
+
+## Процесс разработки
+
+### Первоначальная настройка
 ```bash
-# Activate pnpm via corepack
+# Активировать pnpm через corepack
 corepack enable && corepack prepare pnpm@latest --activate
 
-# Install all dependencies (root workspace + all apps/packages)
+# Установить все зависимости (корневой workspace + все apps/packages)
 pnpm install
 
-# Start PostgreSQL container
+# Поднять контейнер PostgreSQL
 pnpm docker:up
-# or: docker compose up -d postgres
+# или: docker compose up -d postgres
 
-# Initialize database schema & run Prisma migrations
+# Инициализировать схему БД и прогнать Prisma-миграции
 pnpm --filter api exec prisma migrate dev --name init
 ```
 
-### Running Dev Servers
+### Запуск dev-серверов
 ```bash
-# Terminal 1: Start both frontend (Vite :5173) and backend (Nest :4000) in parallel
+# Терминал 1: параллельно поднять frontend (Vite :5173) и backend (Nest :4000)
 pnpm dev
 
-# Terminal 2 (optional): Watch database with Prisma Studio
+# Терминал 2 (опционально): смотреть БД через Prisma Studio
 pnpm --filter api exec prisma studio
 ```
 
-### Building for Production
+### Сборка для продакшена
 ```bash
-# Build all apps and packages
+# Собрать все apps и packages
 pnpm build
 
-# Lint all apps and packages
+# Линт всех apps и packages
 pnpm lint
 ```
 
-### Database
+### База данных
 
-#### Migrations
+#### Миграции
 ```bash
-# Create a new migration after schema.prisma changes
+# Создать новую миграцию после изменений schema.prisma
 pnpm --filter api exec prisma migrate dev --name <migration_name>
 
-# Apply existing migrations (CI/deploy)
+# Применить существующие миграции (CI/деплой)
 pnpm --filter api exec prisma migrate deploy
 
-# View database in web UI
+# Посмотреть базу в веб-интерфейсе
 pnpm --filter api exec prisma studio
 ```
 
-#### Schema
-- Location: `apps/api/prisma/schema.prisma`
-- Models: User, Link, Click (with Click.DeviceType enum)
-- Each entity in the schema is the single source of truth for:
-  - Prisma Client types (FE/BE both use `@prisma/client` or `@link-shortener/shared-types`)
-  - Database migrations
-  - Future ORM-agnostic type exports to shared-types
+#### Схема
+- Расположение: `apps/api/prisma/schema.prisma`
+- Модели: User, Link, Click (с enum'ом Click.DeviceType), RevokedToken
+- Каждая сущность схемы — единственный источник истины для:
+  - типов Prisma Client (FE/BE используют `@prisma/client` или `@link-shortener/shared-types`)
+  - миграций БД
+  - будущего экспорта ORM-независимых типов в shared-types
 
-### Environment Variables
+#### Отзыв JWT (server-side logout)
+`POST /auth/logout` (`AuthController.logout`, за `JwtAuthGuard`) — вставляет `jti` текущего токена в `RevokedToken`; `JwtStrategy.validate()` проверяет эту таблицу на КАЖДОМ аутентифицированном запросе, не только при входе. До этого «выход» был чисто клиентским (удаление токена из `localStorage`) — украденный/утёкший токен оставался рабочим все `JWT_EXPIRES_IN` (7 дней по умолчанию) независимо от того, что делал легитимный пользователь. Токены, выпущенные до появления `jti` (обратная совместимость), просто пропускают проверку отзыва — не ошибка, доживают до истечения по своему исходному TTL. Устаревшие строки `RevokedToken` подчищаются лениво при каждом реальном логауте (не отдельным cron-джобом — при таком масштабе не нужно).
 
-#### Root `.env` (docker-compose credentials, .gitignored)
+### Переменные окружения
+
+#### Корневой `.env` (креды docker-compose, в .gitignore)
 ```
 POSTGRES_USER=linkshortener
 POSTGRES_PASSWORD=linkshortener
 POSTGRES_DB=linkshortener
 ```
 
-#### Backend `apps/api/.env` (database connection + app config, .gitignored)
+#### Backend `apps/api/.env` (подключение к БД + конфиг приложения, в .gitignore)
 ```
 DATABASE_URL="postgresql://linkshortener:linkshortener@localhost:5432/linkshortener"
 PORT=4000
+# Список origin для CORS через запятую — по умолчанию localhost, на реальном деплое указать
+# настоящий домен фронтенда:
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
 #### Frontend
-- No `.env` needed for dev — `vite.config.ts` proxies `/api/*` requests to `http://localhost:4000` (prefix stripped before forwarding), so the browser only ever talks to `:5173`.
-- Environment variables for build-time config (e.g., `VITE_API_URL`) go in `apps/web/.env` if/when needed.
+- `.env` для dev не нужен — `vite.config.ts` проксирует запросы `/api/*` на `http://localhost:4000` (префикс срезается перед проксированием), браузер общается только с `:5173`.
+- Переменные окружения для build-time конфига (например, `VITE_API_URL`) — в `apps/web/.env`, если/когда понадобятся.
 
-### Scripts (pnpm commands)
+### MCP-серверы
 
-**Root workspace** (`pnpm` = run in all apps/packages):
-- `pnpm dev` — Run all `dev` scripts in parallel (persistent, no cache)
-- `pnpm build` — Build all apps/packages with dependency awareness (Turborepo)
-- `pnpm lint` — Lint all apps/packages
-- `pnpm type-check` — Run TypeScript type checking all apps
-- `pnpm test` — Run all tests
-- `pnpm docker:up` — Start PostgreSQL container
-- `pnpm docker:down` — Stop and remove PostgreSQL container
-- `pnpm docker:logs` — Tail PostgreSQL logs
+MCP подключает Claude Code к внешним системам напрямую, вместо того чтобы гадать по выводу shell-команд. Пять из шести закоммичены в `.mcp.json` — свежий клон получает их автоматически (Claude Code спросит разрешение подключить при первом запуске в этой директории). `claude-in-chrome` — расширение браузера, не MCP-сервер, в `.mcp.json` не попадает в принципе. Semgrep — единственное исключение, см. отдельно ниже таблицы.
+
+| MCP | Что делает | Нужен аккаунт/ключ? |
+|---|---|---|
+| **PostgreSQL** | Инспекция БД (таблицы, данные, запросы) прямо из чата | Нет — коннект-строка захардкожена в `.mcp.json`, но это те же дефолтные dev-креды (`linkshortener`/`linkshortener`), что и в шаблоне `.env` выше в этом файле — не секрет |
+| **Context7** | Актуальная документация/примеры по версии используемой библиотеки вместо возможно устаревших знаний модели | Нет (опционально ключ для более высоких лимитов) |
+| **Docker** | Инспекция контейнеров/логов/образов без ручных `docker ps`/`docker logs` | Нет — локальный Docker |
+| **claude-in-chrome** | Визуальное тестирование UI в реальном браузере | Нет — расширение Chrome, настраивается отдельно от `.mcp.json` |
+| **Playwright** | Управление браузером для E2E | Нет — `npx @playwright/mcp` |
+| **GitHub** | Публикация репозитория, PR, статусы CI прямо из чата | Да — локальный `ghcr.io/github/github-mcp-server` со встроенным OAuth (браузер откроется при первом использовании) |
+
+**Semgrep не в `.mcp.json`** — его конфиг требует абсолютный host-путь текущего чекаута в `docker run -v` (у каждого разработчика свой), а автоматический конвейер (`.claude/agents/security-reviewer.md`, `backend-reviewer.md`) и так не использует MCP-инструменты Semgrep — они гоняют `docker run ... semgrep scan` напрямую через Bash (см. Troubleshooting ниже, почему: `uvx`/`pip` недоступны в этом окружении для официального пути `semgrep-mcp`). MCP-сервер Semgrep нужен только для интерактивных `mcp__semgrep__*` инструментов в чате — если хотите их, добавить в `.mcp.json` локально:
+```json
+"semgrep": {
+  "type": "stdio",
+  "command": "docker",
+  "args": ["run", "-i", "--rm", "-v", "<абсолютный путь к этому чекауту>:/src", "semgrep/semgrep", "semgrep", "mcp"]
+}
+```
+
+### Скрипты (команды pnpm)
+
+**Корневой workspace** (`pnpm` = запуск во всех apps/packages):
+- `pnpm dev` — запустить все `dev`-скрипты параллельно (постоянный процесс, без кэша)
+- `pnpm build` — собрать все apps/packages с учётом зависимостей (Turborepo)
+- `pnpm lint` — линт всех apps/packages
+- `pnpm type-check` — проверка типов TypeScript во всех apps
+- `pnpm test` — прогнать все тесты
+- `pnpm docker:up` — поднять контейнер PostgreSQL
+- `pnpm docker:down` — остановить и удалить контейнер PostgreSQL
+- `pnpm docker:logs` — смотреть логи PostgreSQL
 
 **Backend** (`pnpm --filter api`):
-- `pnpm --filter api dev` — Start Nest dev server with HMR (:4000)
-- `pnpm --filter api build` — Build Nest (tsc + swc)
-- `pnpm --filter api exec prisma migrate dev --name <name>` — Create + apply migration
-- `pnpm --filter api exec prisma studio` — Open Prisma Studio
+- `pnpm --filter api dev` — запустить Nest dev-сервер с HMR (:4000)
+- `pnpm --filter api build` — собрать Nest (tsc + swc)
+- `pnpm --filter api exec prisma migrate dev --name <name>` — создать и применить миграцию
+- `pnpm --filter api exec prisma studio` — открыть Prisma Studio
 
 **Frontend** (`pnpm --filter web`):
-- `pnpm --filter web dev` — Start Vite dev server (:5173)
-- `pnpm --filter web build` — Build Vite bundle (dist/)
-- `pnpm --filter web test` — Run Vitest unit tests (**not installed yet** — Vitest/RTL setup happens in Stage 6, `docs/stage-6-testing-qa.md`; no `test` script exists in `apps/web/package.json` until then)
-- `pnpm --filter web lint` — Lint (oxlint by default)
+- `pnpm --filter web dev` — запустить Vite dev-сервер (:5173)
+- `pnpm --filter web build` — собрать Vite-бандл (dist/)
+- `pnpm --filter web test` — прогнать unit-тесты Vitest
+- `pnpm --filter web lint` — линт (по умолчанию oxlint)
 
-## Code Conventions & Patterns
+## Конвенции и паттерны кода
 
 ### TypeScript
-- **Strict mode**: enabled in all apps and packages (`"strict": true` in tsconfig.json)
-- **No `any`**: use unknown + type guards or proper types
-- **Decorators**: NestJS uses decorators extensively (`@Module`, `@Service`, `@Controller`, etc.)
+- **Strict mode**: включён во всех apps и packages (`"strict": true` в tsconfig.json)
+- **Никакого `any`**: использовать unknown + type guards или нормальные типы
+- **Декораторы**: NestJS активно использует декораторы (`@Module`, `@Service`, `@Controller` и т.д.)
 
-### File Organization
+### Организация файлов
 
 **Backend** (apps/api/src/):
 ```
-auth/             # JWT & Google OAuth strategy, guards, decorators
-users/            # User CRUD, profile
-links/            # Link CRUD (create, read, update, delete)
-redirect/         # Public GET /:code endpoint, click tracking
-analytics/        # Click aggregation, analytics endpoints
-prisma/           # Global PrismaService & PrismaModule
-health/           # GET /health (readiness check)
-common/           # Shared filters, interceptors, pipes
+auth/             # JWT & Google OAuth стратегия, guards, декораторы
+users/            # CRUD пользователей, профиль
+links/            # CRUD ссылок (create, read, update, delete)
+redirect/         # Публичный GET /:code эндпоинт, фиксация кликов
+analytics/        # Агрегация кликов, эндпоинты аналитики
+prisma/           # Глобальный PrismaService и PrismaModule
+health/           # GET /health (проверка готовности)
+common/           # Общие фильтры, интерцепторы, pipes
 ```
 
 **Frontend** (apps/web/src/):
 ```
-routes/           # Page components (Dashboard, LinkAnalytics, Login, NotFound)
-components/ui/   # shadcn/ui & other reusable components (buttons, cards, dialogs, charts)
-features/         # Feature-level logic (links, analytics, auth)
-  ├── links/      # useLinks hook, CreateLinkForm, LinksList
-  ├── analytics/  # Chart components, useAnalytics hook
+routes/           # Компоненты страниц (Dashboard, LinkAnalytics, Login, NotFound)
+components/ui/   # shadcn/ui и другие переиспользуемые компоненты (кнопки, карточки, диалоги, графики)
+features/         # Логика по фичам (links, analytics, auth)
+  ├── links/      # хук useLinks, CreateLinkForm, LinksList
+  ├── analytics/  # компоненты графиков, хук useAnalytics
   └── auth/       # LoginPage, AuthCallback, AuthGuard
-lib/              # Utilities (api-client, query-client, helpers)
-stores/           # Zustand stores (auth.store.ts only, no data stores)
+lib/              # Утилиты (api-client, query-client, хелперы)
+stores/           # Zustand-сторы (только auth.store.ts, без сторов данных)
 ```
 
 **Shared types** (packages/shared-types/src/):
 ```
-index.ts          # All exported types: Link, Click, User, CreateLinkRequest, LinkAnalytics, etc.
-                  # No implementation, only type definitions
+index.ts          # Все экспортируемые типы: Link, Click, User, CreateLinkRequest, LinkAnalytics и т.д.
+                  # Без реализации, только определения типов
 ```
 
-### Patterns & Reuse
+### Паттерны и переиспользование
 
-1. **DTOs & Validation**:
-   - Define Zod schemas in `packages/shared-types` (import into both BE and FE)
-   - Backend uses `class-validator` + Nest `ValidationPipe` for request validation
-   - Frontend uses Zod directly in `react-hook-form`
-   - Same schema = same validation logic everywhere
+1. **DTO и валидация**:
+   - Zod-схемы определяются в `packages/shared-types` (импортируются и в BE, и в FE)
+   - Backend использует `class-validator` + Nest `ValidationPipe` для валидации запросов
+   - Frontend использует Zod напрямую в `react-hook-form`
+   - Одна схема = одна логика валидации везде
 
-2. **API Communication**:
-   - Thin `apps/web/src/lib/api-client.ts` wrapper around `fetch` with error handling
-   - TanStack Query hooks for server state (`useQuery`, `useMutation`)
-   - Response types come from `@link-shortener/shared-types`
+2. **Общение с API**:
+   - Тонкая обёртка `apps/web/src/lib/api-client.ts` над `fetch` с обработкой ошибок
+   - Хуки TanStack Query для серверного состояния (`useQuery`, `useMutation`)
+   - Типы ответов приходят из `@link-shortener/shared-types`
 
-3. **Global State**:
-   - Auth state only (logged-in user, token) → `zustand` store
-   - All other state → TanStack Query (server-driven)
-   - No Redux, no Context overload
+3. **Глобальное состояние**:
+   - Только auth-состояние (залогиненный пользователь, токен) → стор `zustand`
+   - Всё остальное состояние → TanStack Query (серверное)
+   - Никакого Redux, никакой перегрузки Context
 
-4. **Forms**:
-   - `react-hook-form` (lightweight, performant)
-   - `zod` for schema validation (same as backend)
-   - Auto-generated error messages
+4. **Формы**:
+   - `react-hook-form` (лёгкий, производительный)
+   - `zod` для валидации схемой (та же, что на backend)
+   - Автогенерируемые сообщения об ошибках
 
-### Testing
+### Тестирование
 
-- **Backend**: Jest (default with Nest, already in generated package.json)
+- **Backend**: Jest (дефолт для Nest, уже в сгенерированном package.json)
   - `apps/api/src/**/*.spec.ts`
-  - Run: `pnpm --filter api test` · Coverage: `pnpm --filter api test:cov` (80% threshold on all 4 metrics, set in `apps/api/package.json`'s `jest.coverageThreshold` — excludes `*.module.ts`/`main.ts`/`dto/*.ts`)
+  - Запуск: `pnpm --filter api test` · Покрытие: `pnpm --filter api test:cov` (порог 80% по всем 4 метрикам, задан в `jest.coverageThreshold` в `apps/api/package.json` — исключает `*.module.ts`/`main.ts`/`dto/*.ts`)
 
-- **Frontend**: Vitest + React Testing Library (installed Stage 6 — was documented since Stage 1 but never actually set up until then)
+- **Frontend**: Vitest + React Testing Library
   - `apps/web/src/**/*.test.tsx`
-  - Run: `pnpm --filter web test` · Coverage: `pnpm --filter web test:cov` (80% threshold, `apps/web/vitest.config.ts`)
-  - Setup file: `apps/web/src/test/setup.ts` (jest-dom matchers + explicit RTL `cleanup()` registration — `vitest.config.ts` sets `globals: false`, so RTL's auto-cleanup never self-registers)
+  - Запуск: `pnpm --filter web test` · Покрытие: `pnpm --filter web test:cov` (порог 80%, `apps/web/vitest.config.ts`)
+  - Файл настройки: `apps/web/src/test/setup.ts` (матчеры jest-dom + явная регистрация RTL `cleanup()` — `vitest.config.ts` выставляет `globals: false`, поэтому автоочистка RTL сама не регистрируется)
 
-- **E2E**: Playwright, separate workspace `apps/e2e/` (not `apps/web/e2e/` — kept fully isolated from Vitest config)
+- **E2E**: Playwright, отдельный workspace `apps/e2e/` (не `apps/web/e2e/` — намеренно изолирован от конфига Vitest)
   - `apps/e2e/tests/*.spec.ts`
-  - Run: `pnpm --filter e2e test:e2e` (needs `pnpm dev` + `docker compose up -d postgres` running first)
-  - `apps/e2e/tests/auth-helper.ts` logs in by minting a real JWT (same `JWT_SECRET` the backend verifies) and seeding a matching `User` row via `psql` — no real Google OAuth flow is driven (not available in this environment), but every other line of app code (AuthCallback, `/auth/me`, guards) runs for real
-  - Browser install: `npx playwright install chromium` (no `--with-deps` — needs `sudo`/`apt` for system libs not available in every environment; the browser runs fine without them anyway)
+  - Запуск: `pnpm --filter e2e test:e2e` (нужны предварительно запущенные `pnpm dev` + `docker compose up -d postgres`)
+  - `apps/e2e/tests/auth-helper.ts` логинится, выпуская настоящий JWT (тем же `JWT_SECRET`, что проверяет backend) и сея подходящую строку `User` через `psql` — реальный флоу Google OAuth не прогоняется (недоступен в этом окружении), но весь остальной код приложения (AuthCallback, `/auth/me`, guards) отрабатывает по-настоящему
+  - Установка браузера: `npx playwright install chromium` (без `--with-deps` — требует `sudo`/`apt` для системных библиотек, доступных не в каждом окружении; браузер и без них нормально работает)
+  - **a11y**: `@axe-core/playwright` на каждой ключевой странице (`/login`, Dashboard, LinkDetail/analytics) в `full-flow.spec.ts` — объективный, детерминированный скан WCAG2A/AA, только `serious`/`critical` impact (moderate/minor слишком часто спорные — например color-contrast на декоративных элементах — сделали бы проверку хрупкой). Дополняет, не заменяет ручное LLM-ревью `frontend-reviewer`, тот же принцип, что у `security-reviewer` + Semgrep.
 
-## Claude Code Learning Path
+## Отладка и типичные проблемы
 
-This project is a learning vehicle for Claude Code features, structured as 8 stages (initialization → backend → frontend → auth → analytics → testing → CI/CD → polish). Full roadmap, per-stage topics, detailed implementation plans and current status live in **`docs/plan.md`** (overview + status table) and **`docs/stage-N-*.md`** (one detailed file per stage) — read those instead of duplicating them here.
+### Проблемы pnpm
+- **«Ignored build scripts»**: локально это только предупреждение (можно игнорировать), но `pnpm install --frozen-lockfile` на чистом CI-раннере считает это **жёсткой ошибкой** (exit 1) — подтверждено первым реальным прогоном GitHub Actions. Фикс — `allowBuilds: {packageName: true, ...}` в `pnpm-workspace.yaml` (реальный механизм pnpm 11 — не `onlyBuiltDependencies`, это имя для pnpm ≤10, в pnpm 11 молча игнорируется без ошибки). Если увидите, что pnpm сам вставил в этот файл битый блок `allowBuilds:` с буквальными плейсхолдерами `"set this to true or false"` — это pnpm пытается спросить подтверждение без TTY; замените плейсхолдеры на настоящие `true`/`false`, не удаляйте блок целиком.
+- **Конфликты lockfile**: `pnpm install` должен разрешать их автоматически.
 
-## Debugging & Troubleshooting
+### Docker-сборка (pnpm workspace)
+- **Без `.dockerignore` хостовый `node_modules` утекает в образ и всё ломает**: `COPY apps/web apps/web` (или `apps/api apps/api`) без `.dockerignore` тащит внутрь локальный `apps/web/node_modules`/`dist` с хоста — pnpm использует symlink'и на абсолютные хостовые пути (`/home/you/.../node_modules/.pnpm/...`), которых внутри контейнера не существует. Резолвинг модулей в Node идёт снизу вверх по дереву каталогов, так что этот протухший локальный `node_modules` **перекрывает** корректно установленный через `pnpm install` внутри образа. Реально словили этим: `apps/web`-сборка падала с «Cannot find module '@hookform/resolvers/zod'» — выглядело как проблема резолвинга peer-зависимостей pnpm (первая гипотеза), но изолированной проверкой подтверждено, что причина именно в этом — добавление `.dockerignore` (исключающего `node_modules`/`dist`/`.tmp` везде в дереве) само по себе полностью чинит сборку, копировать манифесты остальных пакетов монорепо для этого не требуется.
+- **«column does not exist»**: прогнать `pnpm --filter api exec prisma migrate dev`, чтобы применить непримененные миграции.
+- **Сбросить базу**: `pnpm --filter api exec prisma migrate reset` (деструктивно — только для dev).
+- **`prisma migrate dev` падает с ошибкой `datasource.url`/`prisma.config.ts`**: вы случайно на Prisma v7. Проект закреплён на v6 — проверьте `apps/api/package.json`.
 
-### pnpm issues
-- **"Ignored build scripts"**: locally this is only a warning (safe to ignore), but `pnpm install --frozen-lockfile` on a fresh CI runner treats it as a **hard error** (exit 1) — confirmed by Stage 7's first real GitHub Actions run. The fix is `allowBuilds: {packageName: true, ...}` in `pnpm-workspace.yaml` (pnpm 11's real mechanism — not `onlyBuiltDependencies`, that's the pnpm ≤10 name and pnpm 11 silently ignores it with no error). If you ever see pnpm auto-inject a broken `allowBuilds:` block with literal `"set this to true or false"` placeholder strings into that file, that's pnpm itself trying to prompt without a TTY — replace the placeholders with real `true`/`false`, don't just delete the block.
-- **Lockfile conflicts**: `pnpm install` should auto-resolve.
+### Backend не стартует: «The class-validator package is missing»
+- `ValidationPipe` в `main.ts` требует `class-validator` + `class-transformer` как peer-зависимости. Nest CLI не ставит их по умолчанию: `pnpm --filter api add class-validator class-transformer`.
 
-### Prisma / Database
-- **"column does not exist"**: Run `pnpm --filter api exec prisma migrate dev` to apply pending migrations.
-- **Reset database**: `pnpm --filter api exec prisma migrate reset` (destructive — dev only).
-- **`prisma migrate dev` fails with a `datasource.url`/`prisma.config.ts` error**: you're on Prisma v7 by accident. This project pins v6 — check `apps/api/package.json`.
+### Сборка frontend
+- **Ошибки «module not found»**: убедитесь, что протокол `workspace:*` корректно резолвит `@link-shortener/shared-types`.
+- **Tailwind не применяет стили**: проверьте, что в `apps/web/src/index.css` есть `@import "tailwindcss"`.
+- **`shadcn add` пишет файлы в буквальную директорию `./@/` вместо `src/`**: CLI читает алиас пути `@/` напрямую из `apps/web/tsconfig.json` и не следует по TS project `references` в `tsconfig.app.json`. Алиас должен быть объявлен **в обоих** файлах, `tsconfig.json` и `tsconfig.app.json` (`paths: {"@/*": ["./src/*"]}`) — а не только в `resolve.alias` `vite.config.ts`, который устраивает только бандлер, но не `tsc` и CLI-тулинг, читающий tsconfig напрямую. Раньше здесь ещё требовался `baseUrl: "."` — убран (`tsc` подтверждённо резолвит `paths` и без него в режиме `moduleResolution: "bundler"`, плюс сама опция deprecated и исчезнет в TypeScript 7.0). Если `shadcn add` когда-нибудь снова начнёт класть файлы не туда — значит его собственный, более простой парсер tsconfig всё-таки требует `baseUrl` (в отличие от `tsc`) — верните `"baseUrl": "."` рядом с `paths` в оба файла.
+- **`erasableSyntaxOnly` (в `tsconfig.app.json`) запрещает parameter properties в конструкторе**: `constructor(public readonly x: T)` генерирует рантайм-код присваивания, который этот флаг запрещает. Объявляйте поля явно и присваивайте их в теле конструктора.
 
-### Backend won't start: "The class-validator package is missing"
-- `ValidationPipe` in `main.ts` needs `class-validator` + `class-transformer` as peer deps. Nest CLI doesn't install them by default: `pnpm --filter api add class-validator class-transformer`.
+### Подключение к API
+- **Ошибки CORS**: проверьте, что CORS включён в `apps/api/src/main.ts` для `http://localhost:5173`.
+- **Connection refused**: проверьте, что backend запущен на порту 4000: `curl http://localhost:4000/health`.
 
-### Frontend build
-- **Module not found errors**: Ensure `workspace:*` protocol resolves correctly for `@link-shortener/shared-types`.
-- **Tailwind not styling**: Check `apps/web/src/index.css` has `@import "tailwindcss"`.
-- **`shadcn add` writes files into a literal `./@/` directory instead of `src/`**: the CLI reads the `@/` path alias from `apps/web/tsconfig.json` directly and does not follow TS project `references` into `tsconfig.app.json`. The alias must be declared in **both** `tsconfig.json` and `tsconfig.app.json` (`baseUrl: "."`, `paths: {"@/*": ["./src/*"]}`) — not just `vite.config.ts`'s `resolve.alias`, which only satisfies the bundler, not `tsc` or CLI tooling that reads tsconfig directly.
-- **`erasableSyntaxOnly` (in `tsconfig.app.json`) rejects constructor parameter properties**: `constructor(public readonly x: T)` generates runtime assignment code, which this flag disallows. Declare fields explicitly and assign them in the constructor body instead.
+### Аутентификация
+- **Backend падает при старте с «JWT_SECRET is not set»**: это намеренно (`apps/api/src/auth/jwt-secret.ts`) — приложение отказывается стартовать вместо того, чтобы молча подписывать/проверять токены fallback-значением. Сгенерировать: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` и вставить в `apps/api/.env`.
+- **«Sign in with Google» показывает страницу ошибки Google вместо экрана согласия**: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` ещё не заданы реальными значениями. Остальное приложение прекрасно работает и без них — реальные креды нужны только этой кнопке. Как их получить:
+  1. [Google Cloud Console](https://console.cloud.google.com/) → создать/выбрать проект.
+  2. **OAuth consent screen** (APIs & Services): тип «External», заполнить название приложения + email — для локальной разработки достаточно режима «Testing», верификация Google не нужна.
+  3. **Credentials** → «Create Credentials» → «OAuth client ID» → тип приложения «Web application».
+  4. **Authorized redirect URIs** — добавить ровно `http://localhost:4000/auth/google/callback` (должно совпадать с `GOOGLE_CALLBACK_URL` в `.env`).
+  5. Скопировать **Client ID** и **Client Secret** в `apps/api/.env` (`GOOGLE_CLIENT_ID=...`, `GOOGLE_CLIENT_SECRET=...`).
+  6. Перезапустить backend (`pnpm --filter api dev`) — предупреждение «not configured» должно исчезнуть.
+  7. `http://localhost:5173/login` → «Sign in with Google» теперь должен открыть настоящий экран согласия Google.
+- **`uvx`/`pip` недоступны**: в этом окружении нет Python-тулинга для пакетного менеджера, поэтому `semgrep-mcp` (изначально планировался как MCP-сервер) нельзя поставить через `uvx`. Вместо этого используется официальный Docker-образ напрямую: `docker run --rm -v "$(pwd):/src" semgrep/semgrep semgrep scan --config=auto /src/apps/api/src /src/apps/web/src` — именно так делает `.claude/agents/security-reviewer.md`.
 
-### API connection
-- **CORS errors**: Verify CORS is enabled in `apps/api/src/main.ts` for `http://localhost:5173`.
-- **Connection refused**: Check backend is running on port 4000: `curl http://localhost:4000/health`.
+### Тестирование / E2E
+- **`psql -v var=value -c "... :'var' ..."` падает с ошибкой синтаксиса на `:`**: подстановка переменных `psql` через `:'var'` работает только при чтении SQL из stdin/скрипта/интерактивного ввода, НЕ через сам аргумент `-c` (проверено напрямую на psql 16.15 — идентичный запрос через stdin работает нормально). Использовать `execFileSync('psql', [...], { input: sql })` вместо `-c`, см. `apps/e2e/tests/auth-helper.ts`.
+- **E2E падает в CI с «No such container: link-shortener-db», но проходит локально**: `auth-helper.ts` изначально запускал `psql` через `docker exec` в локальный docker-compose контейнер по имени — в GitHub Actions такого контейнера нет (у Postgres-контейнера `services:` другое, внутреннее имя). Исправлено запуском `psql` через `docker run --network host postgres:16-alpine`, подключаясь напрямую к `localhost:5432` — работает одинаково локально и в CI, не завязано ни на имя контейнера, ни на наличие `psql` на хосте.
+- **`web:type-check` падает только в CI/на чистом клоне с «Cannot find module '@link-shortener/shared-types'»**: задаче `type-check` в `turbo.json` нужен `dependsOn: ["^build"]` (как уже есть у `dev`/`build`/`test:e2e`) — `web` резолвит этот workspace-пакет по его собранному `dist/`, не по `src/`. Локально незаметно, пока `dist/` уже существует от любого прошлого `pnpm dev`/`build`; на по-настоящему чистом чекауте его нет.
+- **`playwright install --with-deps` падает («sudo: a password is required»)**: в этом окружении нет root-доступа. Запускать `npx playwright install chromium` без флага — скачивает только сам бинарник браузера, который нормально работает и без системных библиотек, которые иначе поставил бы `--with-deps`.
 
-### Auth (Stage 4)
-- **Backend crashes on startup with "JWT_SECRET is not set"**: intentional (`apps/api/src/auth/jwt-secret.ts`) — the app refuses to start rather than silently signing/verifying tokens with a fallback value. Generate one: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` and put it in `apps/api/.env`.
-- **"Sign in with Google" shows a Google error page instead of the consent screen**: `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` aren't set to real values yet — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`. The rest of the app works fine without them.
-- **`uvx`/`pip` not available**: this environment has no Python package-manager tooling, so `semgrep-mcp` (originally planned as an MCP server) can't be installed via `uvx`. Use the official Docker image directly instead: `docker run --rm -v "$(pwd):/src" semgrep/semgrep semgrep scan --config=auto /src/apps/api/src /src/apps/web/src` — this is what `.claude/agents/security-reviewer.md` does.
+## Ссылки
 
-### Testing / E2E (Stage 6)
-- **`psql -v var=value -c "... :'var' ..."` errors with a syntax error at `:`**: `psql`'s `:'var'` variable substitution only runs on SQL read via stdin/script/interactive input, NOT on the `-c` argument itself (confirmed directly against psql 16.15 — identical query piped via stdin works fine). Use `execFileSync('psql', [...], { input: sql })` instead of `-c`, see `apps/e2e/tests/auth-helper.ts`.
-- **E2E fails in CI with "No such container: link-shortener-db" but passes locally**: `auth-helper.ts` originally ran `psql` via `docker exec` into the local dev machine's docker-compose container by name — that container doesn't exist in GitHub Actions (the `services:` Postgres container has a different, internal name). Fixed (Stage 7) by running `psql` via `docker run --network host postgres:16-alpine` connecting to `localhost:5432` directly — works identically local/CI without depending on a container name or a host-installed `psql` binary.
-- **`web:type-check` fails only in CI/a fresh clone with "Cannot find module '@link-shortener/shared-types'"**: `turbo.json`'s `type-check` task needs `dependsOn: ["^build"]` (like `dev`/`build`/`test:e2e` already have) — `web` resolves that workspace package against its built `dist/`, not `src/`. Stays invisible locally once `dist/` exists from any earlier `pnpm dev`/`build` run; a genuinely fresh checkout has none.
-- **`playwright install --with-deps` fails ("sudo: a password is required")**: no root access in this environment. Run `npx playwright install chromium` without the flag — downloads just the browser binary, which runs fine without the system libs `--with-deps` would otherwise apt-install.
-- **`pnpm --filter web test` errors "no such script"**: make sure you're not on an old checkout from before Stage 6 — `apps/web/package.json` didn't have a `test` script until then despite `CLAUDE.md`/`docs/plan.md` referencing Vitest since Stage 1.
-
-## Links & References
-
-- [Prisma Docs](https://www.prisma.io/docs/)
-- [NestJS Docs](https://docs.nestjs.com/)
+- [Документация Prisma](https://www.prisma.io/docs/)
+- [Документация NestJS](https://docs.nestjs.com/)
 - [React Router v7](https://reactrouter.com/)
 - [TanStack Query](https://tanstack.com/query/)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Turborepo](https://turbo.build/repo/docs)
 - [pnpm](https://pnpm.io/)
 
-## Project Status
+## Статус проекта
 
-**Stage 1 (Initialization)**: ✅ Done — monorepo skeleton, both dev servers verified working, `GET /health` returns `200` with DB status, first commits pushed.
+Построен как учебное упражнение по Claude Code — весь стек рабочий: backend, frontend, Google OAuth, аналитика, покрытие тестами 80%+, CI/CD на GitHub Actions, Swagger-доки. История того, как проект дошёл до этого состояния — что сделано, что отличалось от плана, какие реальные баги ловило ревью — в **[`CHANGELOG.md`](CHANGELOG.md)** (корень, записи с датами) — этот файл фиксирует только то, что верно *сейчас*, а не как проект к этому пришёл.
 
-**Stage 2 (Backend Core)**: ✅ Done — `/links` CRUD, public `GET /:code` redirect with fire-and-forget click tracking, `analytics.recordClick()` stub. `PrismaService` rewritten to properly `extends PrismaClient` (was an untyped v6/v7-compat hack from Stage 1). `nanoid` pinned to `^3.3.8` (v4+ is ESM-only, breaks this project's CommonJS backend build — same class of issue as the Prisma v7 rollback). See `docs/stage-2-backend-core.md` for full details.
+**MCP-серверы теперь воспроизводимы**: пять из шести закоммичены в `.mcp.json` (см. таблицу выше) — свежий клон получает их автоматически при первом запуске Claude Code в этой директории. Раньше это было «известным пробелом» (настроено только локально на машине разработки, без `.mcp.json` в репозитории) — исправлено.
 
-**Stage 3 (Frontend)**: ✅ Done — Dashboard with create-link form (react-hook-form + zod, shared validation schema now lives in `packages/shared-types`), links list (soft-delete aware, copy-to-clipboard), `react-router-dom` v7 routing, shadcn/ui (Radix base). `Link` type in `shared-types` fixed to match Prisma's actual nullable-field JSON shape rather than an independently-guessed optional-field shape. See `docs/stage-3-frontend.md` for full details.
+**Политика синхронизации документации**: каждый push проходит через `push-gate` (см. `.claude/README.md`), который синхронизирует затронутую документацию (этот файл, `CHANGELOG.md`, `README.md`, если поменялась установка) как часть подготовки push — не отдельный ручной шаг. См. `.claude/skills/push-gate/SKILL.md`.
 
-**Stage 4 (Authentication)**: ✅ Done — Google OAuth + JWT, every `/links` endpoint scoped to the authenticated user, `JwtAuthGuard` + `@CurrentUser()`. Real Google Cloud credentials are the one piece Claude Code can't set up (requires the user's own Google account) — see "Как получить Google OAuth credentials" in `docs/stage-4-authentication.md`; everything else is implemented and verified. App now refuses to start without a real `JWT_SECRET` (`auth/jwt-secret.ts`). `.claude/settings.json` adds a pre-commit `PreToolUse` hook (lint+test gate on `git commit`). See `docs/stage-4-authentication.md` for full details.
-
-**Stage 5 (Analytics)**: ✅ Done — `GET /links/:id/analytics` (owner-scoped), `ua-parser-js`-based UA parsing on every click, 30-day zero-filled click chart, top-5 referrers, device breakdown pie chart. Built via two parallel `Agent`-tool dispatches against the already-fixed `LinkAnalytics` shared-types contract (substituting for the plan's "Agent teams" topic, which needs explicit enablement not attempted during an unsupervised overnight run). See `docs/stage-5-analytics.md` for full details.
-
-**Stage 6 (Testing/QA)**: ✅ Done — 63 backend Jest tests + 37 frontend Vitest tests + 2 Playwright E2E scenarios, all green. Coverage 80%+ on all four metrics in both `api` and `web` (`test:cov` scripts). Most unit tests generated via a new Dynamic Workflow (`.claude/workflows/generate-tests.js`) with independent peer verification per file. New `apps/e2e` workspace. Full-codebase Semgrep sweep tightened `CreateLinkDto`'s URL protocol allowlist (http/https only). See `docs/stage-6-testing-qa.md` for full details.
-
-**Stage 7 (CI/CD)**: ✅ Done — repo published to GitHub (`github.com/AlexGitHubAccount/link-shortener-with-analytics`, private, personal account, not the work account — see `docs/stage-7-cicd.md` for why) after explicit user confirmation, via the official local `ghcr.io/github/github-mcp-server` Docker image (OAuth, no manual token). `.github/workflows/{ci,e2e}.yml` verified green on real GitHub Actions runs — 6 CI-only failures found and fixed along the way (pnpm 11 build-script approval, a type-aware-eslint false positive, a hardcoded local container name in `auth-helper.ts`, and turbo's `type-check`/`test`/`test:cov` tasks all missing `dependsOn: ["^build"]`), none of them catchable without a real cloud run — see `docs/stage-7-cicd.md` for the full list. `/stage-review 7` clean, tagged `stage-7-done`. Remaining manual-only step: branch protection in the GitHub UI (documented in `docs/stage-7-cicd.md`, GitHub MCP has no tool for repo settings).
-
-**Stage 8 (Polish)**: ✅ Done — Swagger/OpenAPI docs at `GET /api/docs` (all 8 real routes annotated and verified in the generated document), a recorded GIF of the core user flow (`docs/assets/link-shortener-demo.gif`, embedded in README), a published final Artifact report, and a full pass over every `docs/stage-*.md` confirming no stale `⏳ Запланирован` statuses remain. Also removed `apps/api/src/app.{controller,service}.ts` — unused Nest CLI scaffold from Stage 1, never registered in `AppModule`, would have shown up as a stray endpoint in the new Swagger UI. See `docs/stage-8-polish.md` for full details.
-
-**Documentation sync policy**: after every stage's `/stage-review N` comes back clean, ALL affected documentation (this file, `docs/plan.md`, the stage's own `docs/stage-N-*.md`, `README.md` if setup changed) is synchronized to match the actual implementation before the stage is considered done — not just the status line. See "Обязательное обновление документации после этапа" in `docs/plan.md`.
+**Автоматизация push**: здесь ничего не пушится вручную — pre-push hook (`.claude/hooks/push-gate.sh`) блокирует любой `git push`, не прошедший конвейер `push-gate` (ревью диапазона коммитов, которых ещё нет на remote — code+security, плюс глубокий auth/frontend/backend-слой если задет — и affected-тесты). `git commit` под отдельным, лёгким гейтом того же хука — только быстрый `pnpm lint`, без AI: коммит должен оставаться дешёвой, частой, локальной операцией (свободно коммитить, `--amend`, `rebase`), тяжёлый гейт принадлежит границе, где код реально покидает машину — push. Полная регрессия (весь тест-сьют, E2E, build) в `push-gate` тоже намеренно не входит — это работа уже существующего CI (`.github/workflows/ci.yml` — один workflow, job `e2e` стартует через `needs:` только после того, как job `lint-type-test-build` зелёный), дублировать её локально на каждый push было бы лишней стоимостью и временем без выигрыша. Полный механизм — в `.claude/README.md`.
 
 ---
 
-_Updated: 2026-08-21_  
-_Maintainer: Claude Code learning project_
+_Обновлено: 2026-08-25_  
+_Ведёт: учебный проект по Claude Code_
