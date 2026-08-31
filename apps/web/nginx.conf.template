@@ -1,0 +1,25 @@
+# envsubst'd at container start (see docker-entrypoint) - only ${API_UPSTREAM_URL} is
+# substituted, so nginx's own $-variables below need escaping in envsubst's variable list.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Mirrors vite.config.ts's dev proxy exactly: /api/health -> ${API_UPSTREAM_URL}/health
+    # (the /api prefix is stripped, same rewrite rule as the Vite dev server).
+    location /api/ {
+        proxy_pass ${API_UPSTREAM_URL}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA fallback - react-router-dom handles client-side routes, so any path not matching a
+    # real static file (or /api/ above) falls back to index.html rather than a raw nginx 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

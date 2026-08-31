@@ -1,0 +1,27 @@
+# Without this, COPY apps/web apps/web (and COPY apps/api apps/api) drag the HOST's own
+# node_modules into the build context - pnpm's node_modules is full of symlinks to absolute
+# host paths (e.g. /home/you/project/node_modules/.pnpm/...), which don't exist inside the
+# container. Node's module resolution walks up through every node_modules on the way to root,
+# so a stale per-workspace node_modules copied in like this SHADOWS the correctly pnpm-installed
+# one in the image, breaking resolution in confusing, inconsistent ways depending on what
+# happens to be in each dev machine's local install at build time. Found this the hard way -
+# see the api/web Dockerfile build-log history if reproducing.
+node_modules
+**/node_modules
+
+# Build output - regenerated fresh in each build stage, never wanted from the host.
+dist
+**/dist
+**/.tmp
+
+# Everything else that's local-machine-only or irrelevant to the image.
+.git
+.claude
+docs
+*.log
+coverage
+playwright-report
+test-results
+.env
+.env.*
+!.env.example
