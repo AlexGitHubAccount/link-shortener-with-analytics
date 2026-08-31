@@ -14,6 +14,7 @@ describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let prisma: {
     $queryRaw: jest.Mock;
+    $transaction: jest.Mock;
     click: {
       create: jest.Mock;
       count: jest.Mock;
@@ -24,6 +25,9 @@ describe('AnalyticsService', () => {
   beforeEach(async () => {
     prisma = {
       $queryRaw: jest.fn(),
+      // getLinkAnalytics batches its reads through an interactive $transaction for a consistent
+      // snapshot; the mock just runs the callback with the same mocked client.
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
       click: {
         create: jest.fn(),
         count: jest.fn(),

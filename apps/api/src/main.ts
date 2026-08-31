@@ -22,14 +22,16 @@ async function bootstrap() {
 
   // Baseline security response headers (HSTS, X-Content-Type-Options, no X-Powered-By, etc.) -
   // found missing entirely during a push-gate security-reviewer scope review, added here.
-  // Swagger UI at /api/docs needs its CSP relaxed (inline styles/scripts) to actually render -
-  // disabled ONLY for local dev (NODE_ENV === 'development'). Any other environment, including a
-  // staging/preview deploy running with an unset or non-'production' NODE_ENV, keeps helmet's
-  // default CSP so it is never left without XSS/clickjacking protection.
+  // Swagger UI at /api/docs needs its CSP relaxed (inline styles/scripts) to render, so the
+  // default CSP is dropped in every non-production environment - which is exactly where /api/docs
+  // is mounted (see the `!isProduction` block below). NOTE: env.validation.ts defaults NODE_ENV
+  // to 'development' and @nestjs/config writes that default back into process.env, so a deploy
+  // that does not explicitly set NODE_ENV=production runs WITHOUT CSP and with /api/docs exposed.
+  // The provided apps/api/Dockerfile sets NODE_ENV=production; any other deploy path must too.
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(
     helmet({
-      contentSecurityPolicy:
-        process.env.NODE_ENV === 'development' ? false : undefined,
+      contentSecurityPolicy: isProduction ? undefined : false,
     }),
   );
 
@@ -61,7 +63,6 @@ async function bootstrap() {
   // Swagger/OpenAPI docs (Stage 8) - reads @ApiProperty/@ApiOperation/@ApiTags annotations on
   // DTOs and controllers. The docs UI/JSON itself has no auth control, so it's only mounted
   // outside production to avoid exposing the full API schema unauthenticated.
-  const isProduction = process.env.NODE_ENV === 'production';
   if (!isProduction) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Link Shortener API')
