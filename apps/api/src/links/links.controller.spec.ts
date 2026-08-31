@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { LinksController } from './links.controller';
 import { LinksService } from './links.service';
 
@@ -18,7 +19,12 @@ describe('LinksController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LinksController],
       providers: [{ provide: LinksService, useValue: service }],
-    }).compile();
+    })
+      // Real ThrottlerGuard needs ThrottlerModule's storage/options wired up - irrelevant to
+      // what this suite tests (CRUD delegation to LinksService, not rate limiting).
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(LinksController);
   });

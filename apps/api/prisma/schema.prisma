@@ -61,3 +61,15 @@ enum DeviceType {
   BOT
   UNKNOWN
 }
+
+// Server-side JWT revocation — a token's `jti` lands here on explicit logout, checked by
+// JwtStrategy on every request. Without this, "logout" was purely client-side (deleting the
+// token from localStorage) - a leaked token stayed valid for its full life regardless. Rows
+// past their own token's expiry are cleanup candidates (deleted lazily on next logout, see
+// AuthController) - no need to keep them once the token itself would fail on expiry anyway.
+model RevokedToken {
+  jti       String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}

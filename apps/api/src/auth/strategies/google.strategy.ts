@@ -15,7 +15,12 @@ export interface GoogleProfile {
   avatarUrl?: string;
 }
 
-const PLACEHOLDER = 'REPLACE_ME_SEE_STAGE_4_DOC';
+// Any credential still set to a "REPLACE_ME..." placeholder (the .env.example default, or the
+// value CI writes for the e2e job) counts as not configured. Prefix match so the exact wording
+// of the placeholder can change without breaking detection.
+const PLACEHOLDER_PREFIX = 'REPLACE_ME';
+const isPlaceholder = (value?: string): boolean =>
+  !value || value.startsWith(PLACEHOLDER_PREFIX);
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
@@ -25,19 +30,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const clientID = config.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = config.get<string>('GOOGLE_CLIENT_SECRET');
 
-    if (
-      !clientID ||
-      !clientSecret ||
-      clientID === PLACEHOLDER ||
-      clientSecret === PLACEHOLDER
-    ) {
+    if (isPlaceholder(clientID) || isPlaceholder(clientSecret)) {
       // Don't crash the whole app over missing Google credentials - real ones require the
       // user to set up a Google Cloud project themselves (Claude Code can't do this on their
       // behalf). Register the strategy with dummy values so Nest boots cleanly; GET /auth/google
       // will redirect to Google, which will show an error page until real credentials are set.
-      // See "Как получить Google OAuth credentials" in docs/stage-4-authentication.md.
+      // See the "Sign in with Google" entry in CLAUDE.md's Troubleshooting section.
       Logger.warn(
-        'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not configured - Google login will not work until set (see docs/stage-4-authentication.md)',
+        'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not configured - Google login will not work until set (see CLAUDE.md)',
         GoogleStrategy.name,
       );
     }

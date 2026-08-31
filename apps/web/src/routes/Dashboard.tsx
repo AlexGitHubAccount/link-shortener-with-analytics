@@ -3,10 +3,11 @@ import { LinksList } from '@/features/links/LinksList';
 import { DevHealthIndicator } from '@/components/DevHealthIndicator';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth.store';
+import { useLogout } from '@/features/auth/useLogout';
 
 export function Dashboard() {
   const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
+  const { mutate: logout, isPending: isLoggingOut } = useLogout();
 
   return (
     <div className="container py-8 space-y-8">
@@ -17,7 +18,13 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {user && <span className="text-sm text-muted-foreground">{user.email}</span>}
-          <Button type="button" variant="outline" size="sm" onClick={logout}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isLoggingOut}
+            onClick={() => logout()}
+          >
             Sign out
           </Button>
         </div>

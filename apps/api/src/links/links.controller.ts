@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Link } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { LinksService } from './links.service';
@@ -26,7 +27,15 @@ import { UpdateLinkDto } from './dto/update-link.dto';
 export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
+  // Rate limited more tightly than ThrottlerModule's app-wide default (30/60s, tuned for the
+  // public redirect) - link creation is the actual abuse surface (spam/phishing link mass
+  // creation), not just the redirect that follows it. Tracked per-IP like the redirect guard,
+  // same ThrottlerModule storage - a real improvement over no limit at all, though a genuinely
+  // malicious authenticated user behind rotating IPs would need per-user tracking (a custom
+  // ThrottlerGuard.getTracker() override) to fully close, not done here.
   @ApiOperation({ summary: 'Create a short link owned by the current user' })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseGuards(ThrottlerGuard)
   @Post()
   create(
     @CurrentUser() userId: string,

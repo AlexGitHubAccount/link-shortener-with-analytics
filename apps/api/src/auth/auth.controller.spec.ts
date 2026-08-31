@@ -6,7 +6,9 @@ import type { Response } from 'express';
 import type { User } from '@prisma/client';
 import { AuthController } from './auth.controller';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { GoogleProfile } from './strategies/google.strategy';
+import type { RequestUser } from './strategies/jwt.strategy';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -16,6 +18,9 @@ describe('AuthController', () => {
     findOrCreateByGoogleProfile: jest.Mock;
   };
   let configService: { get: jest.Mock };
+  let prismaService: {
+    revokedToken: { upsert: jest.Mock; deleteMany: jest.Mock };
+  };
 
   const baseUser: User = {
     id: 'user-1',
@@ -34,6 +39,12 @@ describe('AuthController', () => {
       findOrCreateByGoogleProfile: jest.fn(),
     };
     configService = { get: jest.fn() };
+    prismaService = {
+      revokedToken: {
+        upsert: jest.fn().mockResolvedValue(undefined),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -41,6 +52,7 @@ describe('AuthController', () => {
         { provide: JwtService, useValue: jwtService },
         { provide: UsersService, useValue: usersService },
         { provide: ConfigService, useValue: configService },
+        { provide: PrismaService, useValue: prismaService },
       ],
     }).compile();
 
@@ -109,9 +121,11 @@ describe('AuthController', () => {
       expect(usersService.findOrCreateByGoogleProfile).toHaveBeenCalledWith(
         googleProfile,
       );
+      // jti is a fresh randomUUID() per call - assert its shape/presence, not an exact value.
       expect(jwtService.sign).toHaveBeenCalledWith({
         sub: baseUser.id,
         email: baseUser.email,
+        jti: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
       });
       expect(res.redirect).toHaveBeenCalledWith(
         'http://localhost:5173/auth/callback#token=signed.jwt.token',
@@ -136,6 +150,45 @@ describe('AuthController', () => {
       expect(res.redirect).toHaveBeenCalledWith(
         'http://localhost:5173/auth/callback#token=another.token',
       );
+    });
+  });
+
+  describe('logout', () => {
+    function buildReq(user: RequestUser) {
+      return { user } as unknown as Parameters<AuthController['logout']>[0];
+    }
+
+    it('revokes the current token by jti and sweeps expired revoked-token rows', async () => {
+      const req = buildReq({
+        userId: 'user-1',
+        email: 'user@example.com',
+        jti: 'token-abc',
+        exp: 1900000000,
+      });
+
+      await controller.logout(req);
+
+      expect(prismaService.revokedToken.upsert).toHaveBeenCalledWith({
+        where: { jti: 'token-abc' },
+        create: { jti: 'token-abc', expiresAt: new Date(1900000000 * 1000) },
+        update: {},
+      });
+      expect(prismaService.revokedToken.deleteMany).toHaveBeenCalledWith({
+        where: { expiresAt: { lt: expect.any(Date) as Date } },
+      });
+    });
+
+    it('is a no-op when the token predates the jti field (nothing to revoke by id)', async () => {
+      const req = buildReq({
+        userId: 'user-1',
+        email: 'user@example.com',
+        jti: undefined as unknown as string,
+      });
+
+      await controller.logout(req);
+
+      expect(prismaService.revokedToken.upsert).not.toHaveBeenCalled();
+      expect(prismaService.revokedToken.deleteMany).not.toHaveBeenCalled();
     });
   });
 });

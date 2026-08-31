@@ -1,22 +1,26 @@
 import {
   Controller,
   Get,
+  HttpCode,
   NotFoundException,
+  Post,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '@link-shortener/shared-types';
+import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { GoogleProfile } from './strategies/google.strategy';
-import type { JwtPayload } from './strategies/jwt.strategy';
+import type { JwtPayload, RequestUser } from './strategies/jwt.strategy';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -25,7 +29,46 @@ export class AuthController {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  // Revokes the CURRENT token server-side (inserts its jti into RevokedToken - see
+  // JwtStrategy.validate, which checks this on every subsequent authenticated request). Without
+  // this, "logout" was purely client-side (deleting the token from localStorage) and a
+  // leaked/stolen token stayed valid for its full remaining life regardless of what the
+  // legitimate user did. Idempotent - calling it twice with an already-revoked token just
+  // re-inserts the same row (upsert), not an error.
+  @ApiOperation({
+    summary:
+      'Revoke the current token server-side (real logout, not just a client-side clear)',
+  })
+  @ApiBearerAuth()
+  @Post('logout')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  async logout(@Req() req: Request & { user: RequestUser }): Promise<void> {
+    const { jti, exp } = req.user;
+    if (!jti) {
+      // Token predates the jti field (issued before this feature existed) - nothing to revoke
+      // by id, but it's still short-lived enough to just expire naturally. Not an error.
+      return;
+    }
+    await this.prisma.revokedToken.upsert({
+      where: { jti },
+      create: {
+        jti,
+        expiresAt: exp
+          ? new Date(exp * 1000)
+          : new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+      update: {},
+    });
+    // Lazy cleanup of rows whose own token already expired anyway - piggybacks on a real
+    // logout request rather than needing a separate cron job at this project's scale.
+    await this.prisma.revokedToken.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+  }
 
   // Frontend calls this right after picking up the token from the callback redirect, to get
   // real user info (email/displayName/avatarUrl) for the auth store rather than trusting an
@@ -71,7 +114,13 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     const user = await this.usersService.findOrCreateByGoogleProfile(req.user);
-    const payload: JwtPayload = { sub: user.id, email: user.email };
+    // jti (JWT ID) - unique per issued token, unrelated to the user id. This is what a later
+    // POST /auth/logout revokes; without it, revocation would have no per-token handle to act on.
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      jti: randomUUID(),
+    };
     const token = this.jwtService.sign(payload);
 
     const frontendUrl =

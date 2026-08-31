@@ -71,10 +71,11 @@ describe('GoogleStrategy', () => {
     expect(moduleRef.get(GoogleStrategy)).toBeInstanceOf(GoogleStrategy);
   });
 
-  it('treats the literal placeholder string as unconfigured (same as missing)', async () => {
+  it('treats any REPLACE_ME... placeholder string as unconfigured (same as missing)', async () => {
+    // The exact value CI writes for the e2e job - a prefix match, not an exact string.
     const placeholderConfigGet = jest.fn((key: string) => {
-      if (key === 'GOOGLE_CLIENT_ID') return 'REPLACE_ME_SEE_STAGE_4_DOC';
-      if (key === 'GOOGLE_CLIENT_SECRET') return 'REPLACE_ME_SEE_STAGE_4_DOC';
+      if (key === 'GOOGLE_CLIENT_ID') return 'REPLACE_ME_SEE_CLAUDE_MD';
+      if (key === 'GOOGLE_CLIENT_SECRET') return 'REPLACE_ME_SEE_CLAUDE_MD';
       return undefined;
     });
 

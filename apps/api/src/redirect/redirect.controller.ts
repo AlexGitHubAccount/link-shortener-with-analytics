@@ -6,16 +6,24 @@ import {
   NotFoundException,
   Param,
   Redirect,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { LinksService } from '../links/links.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 // Deliberately its own module/controller, not part of LinksModule's CRUD surface:
 // this is the highest-traffic path in the app and must never depend on future
 // auth-guard checks the way the private /links endpoints will (Stage 4).
+//
+// This is also the ONE endpoint in the app with no JwtAuthGuard - anyone can hit it, and every
+// hit writes a Click row. @UseGuards(ThrottlerGuard) opts it into the ThrottlerModule limits
+// registered in app.module.ts (found missing entirely during a push-gate security-reviewer
+// scope review) without throttling any of the authenticated dashboard traffic elsewhere.
 @ApiTags('redirect')
 @Controller()
+@UseGuards(ThrottlerGuard)
 export class RedirectController {
   constructor(
     private readonly linksService: LinksService,

@@ -5,8 +5,8 @@ export class CreateLinkDto {
   // require_protocol + an explicit http/https allowlist (validator.js's default also permits
   // ftp: - no legitimate use case for a link shortener, just needless surface). Redirecting to
   // an arbitrary http(s) URL is the product's entire purpose (Semgrep's generic
-  // nestjs-open-redirect rule flags this pattern - accepted by design, see
-  // docs/stage-6-testing-qa.md's Semgrep section for the full reasoning), so the mitigation
+  // nestjs-open-redirect rule flags this pattern - accepted by design, see the Semgrep
+  // entry in CLAUDE.md's Troubleshooting section for the full reasoning), so the mitigation
   // here is protocol allowlisting, not blocking dynamic redirects altogether.
   @ApiProperty({
     example: 'https://example.com/some/long/path',

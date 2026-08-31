@@ -1,50 +1,104 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
+import { PrismaService } from '../../prisma/prisma.service';
 
 describe('JwtStrategy', () => {
+  function buildConfig(
+    secret: unknown = 'a-real-jwt-secret-value',
+  ): ConfigService {
+    return {
+      get: jest.fn().mockReturnValue(secret),
+    } as unknown as ConfigService;
+  }
+
+  function buildPrisma(revokedTokenFound: unknown = null): {
+    prisma: PrismaService;
+    findUnique: jest.Mock;
+  } {
+    const findUnique = jest.fn().mockResolvedValue(revokedTokenFound);
+    const prisma = {
+      revokedToken: { findUnique },
+    } as unknown as PrismaService;
+    return { prisma, findUnique };
+  }
+
   describe('constructor', () => {
     it('constructs successfully when JWT_SECRET is configured', () => {
-      const config = {
-        get: jest.fn().mockReturnValue('a-real-jwt-secret-value'),
-      } as unknown as ConfigService;
+      const config = buildConfig();
+      const { prisma } = buildPrisma();
 
-      expect(() => new JwtStrategy(config)).not.toThrow();
+      expect(() => new JwtStrategy(config, prisma)).not.toThrow();
       expect(config.get).toHaveBeenCalledWith('JWT_SECRET');
     });
 
     it('throws when JWT_SECRET is not configured (fail-fast via getRequiredJwtSecret)', () => {
-      const config = {
-        get: jest.fn().mockReturnValue(undefined),
-      } as unknown as ConfigService;
+      // null, not undefined - a default parameter only kicks in for an omitted/undefined
+      // argument, so passing undefined here would silently fall back to the "real secret"
+      // default instead of exercising the missing-secret path this test means to cover.
+      const config = buildConfig(null);
+      const { prisma } = buildPrisma();
 
-      expect(() => new JwtStrategy(config)).toThrow(
+      expect(() => new JwtStrategy(config, prisma)).toThrow(
         /JWT_SECRET is not set in apps\/api\/\.env/,
       );
     });
   });
 
   describe('validate', () => {
-    const config = {
-      get: jest.fn().mockReturnValue('a-real-jwt-secret-value'),
-    } as unknown as ConfigService;
-    const strategy = new JwtStrategy(config);
+    it('maps a valid JWT payload to a RequestUser when the token is not revoked', async () => {
+      const { prisma, findUnique } = buildPrisma(null);
+      const strategy = new JwtStrategy(buildConfig(), prisma);
 
-    it('maps a valid JWT payload to a RequestUser (happy path)', () => {
-      const result = strategy.validate({
+      const result = await strategy.validate({
         sub: 'user-123',
         email: 'alice@example.com',
+        jti: 'token-abc',
+        exp: 1900000000,
       });
 
+      expect(findUnique).toHaveBeenCalledWith({ where: { jti: 'token-abc' } });
       expect(result).toEqual({
         userId: 'user-123',
         email: 'alice@example.com',
+        jti: 'token-abc',
+        exp: 1900000000,
       });
     });
 
-    it('passes through payload fields verbatim, including an empty email (edge case)', () => {
-      const result = strategy.validate({ sub: 'user-456', email: '' });
+    it('throws UnauthorizedException when the token jti has been revoked (real server-side logout)', async () => {
+      const { prisma } = buildPrisma({
+        jti: 'token-abc',
+        expiresAt: new Date(),
+      });
+      const strategy = new JwtStrategy(buildConfig(), prisma);
 
-      expect(result).toEqual({ userId: 'user-456', email: '' });
+      await expect(
+        strategy.validate({
+          sub: 'user-123',
+          email: 'alice@example.com',
+          jti: 'token-abc',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('does not look up revocation for a token issued before jti existed (backward compatible)', async () => {
+      const { prisma, findUnique } = buildPrisma(null);
+      const strategy = new JwtStrategy(buildConfig(), prisma);
+
+      const result = await strategy.validate({
+        sub: 'user-456',
+        email: '',
+        jti: undefined as unknown as string,
+      });
+
+      expect(findUnique).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        userId: 'user-456',
+        email: '',
+        jti: undefined,
+        exp: undefined,
+      });
     });
   });
 });

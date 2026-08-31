@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GoneException, NotFoundException } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { Link } from '@prisma/client';
 import { RedirectController } from './redirect.controller';
 import { LinksService } from '../links/links.service';
@@ -32,7 +33,13 @@ describe('RedirectController', () => {
         { provide: LinksService, useValue: linksService },
         { provide: AnalyticsService, useValue: analyticsService },
       ],
-    }).compile();
+    })
+      // Real ThrottlerGuard needs ThrottlerModule's storage/options wired up - irrelevant to
+      // what this suite tests (redirect logic, not rate limiting), so it's stubbed out rather
+      // than pulling in the real module just to satisfy DI.
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<RedirectController>(RedirectController);
   });
