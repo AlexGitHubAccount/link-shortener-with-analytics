@@ -143,7 +143,7 @@ export class LinksService {
     // satisfies but id+userId together don't (no compound unique constraint on the schema) -
     // updateMany accepts a plain filter instead, closing the gap between "checked ownership"
     // and "wrote the row" a check-then-act pattern would otherwise leave open. Flagged by
-    // security-reviewer (Stage 4) as defense-in-depth, not an active exploit as written.
+    // an earlier security review as defense-in-depth, not an active exploit as written.
     const result = await this.prisma.link.updateMany({
       where: { id, userId },
       data: {

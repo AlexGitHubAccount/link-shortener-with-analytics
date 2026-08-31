@@ -58,8 +58,8 @@ export interface Click {
 export const createLinkRequestSchema = z.object({
   // protocol allowlist matches the backend's CreateLinkDto exactly (@IsUrl({protocols:
   // ['http','https']})) - both sides accept the same set, so client-side validation never
-  // passes something the server then rejects (see Stage 6's Semgrep sweep / stage-6-testing-qa.md
-  // for why http/https-only, not a broader allowlist).
+  // passes something the server then rejects. http/https-only (not a broader allowlist) keeps
+  // javascript:/data: URLs out - confirmed by an earlier Semgrep sweep.
   originalUrl: z.url({
     protocol: /^https?$/,
     error: 'Enter a valid URL, including http:// or https://',

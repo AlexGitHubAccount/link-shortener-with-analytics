@@ -2,10 +2,9 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { loginAs } from './auth-helper';
 
-// Objective, deterministic a11y baseline via axe-core - complements (not replaces)
-// frontend-reviewer's LLM accessibility review in push-gate, the same way security-reviewer
-// pairs its own LLM judgment with Semgrep for a second, rule-based opinion. Scoped to
-// serious/critical impact only - moderate/minor axe findings are frequently debatable
+// Objective, deterministic a11y baseline via axe-core - complements (not replaces) manual
+// LLM accessibility review (code-reviewer / /code-review) with a rule-based second opinion.
+// Scoped to serious/critical impact only - moderate/minor axe findings are frequently debatable
 // (color-contrast on decorative elements, etc.) and would make this assertion too brittle to
 // stay green; serious/critical are the ones worth failing a build over.
 async function expectNoSeriousA11yViolations(page: import('@playwright/test').Page) {

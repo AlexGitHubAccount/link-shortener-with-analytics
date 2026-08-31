@@ -26,7 +26,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     // @Throttle(...) - NOT applied as a global APP_GUARD here on purpose, so authenticated
     // dashboard traffic (links/analytics) stays unthrottled. Currently only RedirectController's
     // public GET /:code opts in - it's the one endpoint with no JwtAuthGuard, found unprotected
-    // during a push-gate security-reviewer scope review.
+    // during an earlier security review.
     // Uses the default in-memory storage: counters are per Node process and reset on restart.
     // Fine for the current single-container deployment; before running more than one API replica,
     // swap in a shared ThrottlerStorage (e.g. Redis) or the effective limit becomes N x configured.

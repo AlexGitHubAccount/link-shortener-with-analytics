@@ -42,7 +42,14 @@ Prisma-миграцию и throttler-guard, так и не сошёлся, аг�
   обычными Edit/Bash, затем повторный `/push-gate`. Docs-only быстрый путь и механизм
   хэш-расписки сохранены.
 - **Новый** `agents/code-reviewer.md` — лёгкое diff-scoped ревью (корректность + явная
-  безопасность + конвенции), `maxTurns: 12`, только отчёт по схеме, ≤10 находок.
+  безопасность + конвенции), `maxTurns: 12`, только отчёт по схеме, ≤10 находок. Это
+  единственный ревьюер в проекте.
+- **Удалены** `agents/security-reviewer.md`, `backend-reviewer.md`, `frontend-reviewer.md` —
+  их авто-конвейер (`push-gate-pipeline.js`) убран, а держать три глубоких ролевых промпта
+  «на всякий случай» противоречит цели «оставить только то, что точно используется». Их
+  работу теперь покрывают `code-reviewer` + сами dev-агенты (у каждого прописаны паттерны
+  безопасности/БД/a11y проекта). Для особо чувствительного диапазона (auth) — встроенный
+  `/code-review high`/`ultra`.
 - `hooks/push-gate.sh`: commit-гейт теперь показывает хвост `pnpm lint` в отказе; текст
   push-отказа переписан под новый гейт. Механизм расписки не тронут.
 
@@ -56,17 +63,26 @@ Prisma-миграцию и throttler-guard, так и не сошёлся, аг�
   Каждый владеет только закреплёнными за ним файлами.
 - **Новый** `skills/feature/SKILL.md` (`/feature <описание>`) — плейбук ведущего (tech-lead =
   основная сессия): план с закреплением файлов (двое тиммейтов не трогают один файл) → спавн
-  тиммейтов → координация → ревьюеры-субагенты по областям → `/push-gate`.
-- **Ревьюеры** (`security/backend/frontend-reviewer.md`): убраны упоминания удалённого
-  workflow, добавлены `model: sonnet` + `maxTurns: 15`. Теперь это роли команды — их
-  запускает ведущий субагентами (без имени) по затронутым областям, а не автоматический
-  конвейер. `frontend-reviewer` — убраны браузерные `mcp__claude-in-chrome__*` из `tools`
-  (риск зависания), ревью только по исходникам. `security-reviewer` — шаг Semgrep обёрнут в
-  `timeout 120`.
+  тиммейтов → координация → `code-reviewer` субагентом → `/push-gate`.
+
+**Чистка хвостов старого подхода:**
+
+- Комментарии-обоснования в коде, ссылавшиеся по имени на удалённую машинерию
+  (`push-gate security-reviewer scope review`, `stage-review's security-reviewer`,
+  `frontend-reviewer's LLM review in push-gate`, мёртвый `stage-6-testing-qa.md`),
+  переформулированы на нейтральное «an earlier security review / Semgrep sweep» —
+  `apps/api/src/{app.module,main}.ts`, `apps/api/src/redirect/redirect.controller.ts`,
+  `apps/e2e/tests/{auth-helper,full-flow.spec}.ts`, `packages/shared-types/src/index.ts`.
+  Сам код не тронут, только текст комментариев.
+- `CLAUDE.md`: раздел Semgrep и Troubleshooting `uvx` больше не ссылаются на
+  `security-reviewer.md` — Semgrep никем не запускается автоматически, только вручную при
+  необходимости.
 
 Документация синхронизирована: `.claude/README.md` (полностью переписан под две части —
-гейт и команда), `CLAUDE.md` (секция про push + новая секция про команду), корневой
-`README.md`.
+гейт и команда), `CLAUDE.md` (раздел про push + раздел про команду + Semgrep/a11y),
+корневой `README.md` (список Skills/Subagents/Hooks). `CHANGELOG.md` — журнал истории,
+переписыванию не подлежит; прежние записи про эволюцию `commit-gate`/`push-gate-pipeline`
+оставлены как есть, эта запись их замещает по факту.
 
 ## Claude Code не читает секреты: permissions.deny на .env (2026-08-31)
 

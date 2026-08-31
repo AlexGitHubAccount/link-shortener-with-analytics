@@ -17,11 +17,11 @@ async function bootstrap() {
   // Runs PrismaService.onModuleDestroy() (closes the DB connection cleanly) and every other
   // module's shutdown hook on SIGTERM/SIGINT - without this, NestJS never calls them at all, so
   // every container restart/redeploy risked leaving connections dangling instead of closing
-  // them. Found missing entirely during a push-gate security-reviewer scope review.
+  // them. Found missing entirely during an earlier security review.
   app.enableShutdownHooks();
 
   // Baseline security response headers (HSTS, X-Content-Type-Options, no X-Powered-By, etc.) -
-  // found missing entirely during a push-gate security-reviewer scope review, added here.
+  // found missing entirely during an earlier security review, added here.
   // Swagger UI at /api/docs needs its CSP relaxed (inline styles/scripts) to render, so the
   // default CSP is dropped in every non-production environment - which is exactly where /api/docs
   // is mounted (see the `!isProduction` block below). NOTE: env.validation.ts defaults NODE_ENV

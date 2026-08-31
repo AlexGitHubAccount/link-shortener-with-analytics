@@ -47,7 +47,7 @@ export function mintTestJwt(userId: string, email: string): string {
 function seedTestUser(userId: string, email: string): void {
   // Values are passed as psql variables (-v) and referenced via :'name', which psql quotes
   // and escapes as SQL string literals - avoids building SQL via raw string interpolation
-  // (stage-review's security-reviewer flagged the original raw-interpolation version).
+  // (an earlier security review flagged the original raw-interpolation version).
   //
   // Important: psql's :'var' substitution only runs on SQL it reads via stdin/script/interactive
   // input, NOT on the argument passed to -c (confirmed directly against this psql 16.15 build -
