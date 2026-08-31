@@ -15,7 +15,7 @@ jobs:
   lint-type-test-build:
     runs-on: ubuntu-latest
     # No Postgres service here - backend unit tests mock PrismaService entirely (Stage 6),
-    # never hit a real database. Only e2e.yml needs a live Postgres.
+    # never hit a real database. Only the e2e job below needs a live Postgres.
     env:
       # prisma generate reads DATABASE_URL from schema.prisma's env("DATABASE_URL") but never
       # connects during generate (only migrate/db push do) - any well-formed value is enough.
@@ -35,6 +35,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Zero-config supply-chain check (pnpm's own audit, backed by the npm advisory database -
+      # no account/token needed, unlike Semgrep's Supply Chain product which requires a login).
+      # Fails the build on high/critical. First real run found a transitive prisma -> @prisma/
+      # config -> deepmerge-ts vuln, fixed via pnpm-workspace.yaml's `overrides` - see there for
+      # why this can't just be "bump the direct dependency".
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+
       - name: Generate Prisma Client
         run: pnpm --filter api exec prisma generate
 
@@ -49,3 +57,93 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    needs: lint-type-test-build
+    # Only spin up Postgres + a browser + full dev servers once the cheap checks above are
+    # already green - no point burning CI minutes on a full E2E run against a build that's
+    # already known broken by lint/type-check/unit/build.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: linkshortener
+          POSTGRES_PASSWORD: linkshortener
+          POSTGRES_DB: linkshortener
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U linkshortener"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write apps/api/.env
+        # Mirrors what a human dev does locally (cp .env.example .env + fill in values) - the
+        # real backend .env is gitignored and never exists in a fresh checkout, CI included.
+        # Google credentials stay as placeholders (auth-helper.ts's JWT-seeding login bypasses
+        # the real OAuth flow entirely - see CLAUDE.md's Troubleshooting section for why Claude
+        # Code can't supply real Google credentials here either).
+        run: |
+          cat > apps/api/.env <<EOF
+          DATABASE_URL="postgresql://linkshortener:linkshortener@localhost:5432/linkshortener"
+          PORT=4000
+          GOOGLE_CLIENT_ID=REPLACE_ME_SEE_CLAUDE_MD
+          GOOGLE_CLIENT_SECRET=REPLACE_ME_SEE_CLAUDE_MD
+          GOOGLE_CALLBACK_URL=http://localhost:4000/auth/google/callback
+          FRONTEND_URL=http://localhost:5173
+          JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(48).toString('hex'))")
+          JWT_EXPIRES_IN=7d
+          EOF
+
+      - name: Generate Prisma Client + run migrations
+        run: |
+          pnpm --filter api exec prisma generate
+          pnpm --filter api exec prisma migrate deploy
+
+      - name: Install Playwright browser
+        run: pnpm --filter e2e exec playwright install --with-deps chromium
+
+      - name: Start dev servers
+        # Real dev servers (not `vite preview`) - vite.config.ts's /api proxy is only defined
+        # under `server:`, not `preview:`, so `vite preview` wouldn't forward API calls at all.
+        # This matches exactly how every manual verification pass this project has done works.
+        run: |
+          pnpm dev > /tmp/dev-servers.log 2>&1 &
+          echo "Waiting for backend..."
+          timeout 60 bash -c 'until curl -sf http://localhost:4000/health > /dev/null; do sleep 1; done'
+          echo "Waiting for frontend..."
+          timeout 60 bash -c 'until curl -sf http://localhost:5173/ > /dev/null; do sleep 1; done'
+
+      - name: Run Playwright E2E
+        run: pnpm --filter e2e exec playwright test
+
+      - name: Upload dev server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-servers-log
+          path: /tmp/dev-servers.log
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 14

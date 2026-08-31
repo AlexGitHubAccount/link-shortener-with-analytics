@@ -1,15 +1,33 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { loginAs } from './auth-helper';
 
-// Full flow per docs/stage-6-testing-qa.md: login -> create link -> follow the short link
-// (redirect confirmed) -> analytics page shows the click. Login uses a seeded JWT rather than
-// a real Google OAuth round trip - see auth-helper.ts for why and how.
+// Objective, deterministic a11y baseline via axe-core - complements (not replaces)
+// frontend-reviewer's LLM accessibility review in push-gate, the same way security-reviewer
+// pairs its own LLM judgment with Semgrep for a second, rule-based opinion. Scoped to
+// serious/critical impact only - moderate/minor axe findings are frequently debatable
+// (color-contrast on decorative elements, etc.) and would make this assertion too brittle to
+// stay green; serious/critical are the ones worth failing a build over.
+async function expectNoSeriousA11yViolations(page: import('@playwright/test').Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  const seriousOrWorse = results.violations.filter(
+    (v) => v.impact === 'serious' || v.impact === 'critical',
+  );
+  expect(seriousOrWorse, JSON.stringify(seriousOrWorse, null, 2)).toEqual([]);
+}
+
+// Full flow: login -> create link -> follow the short link (redirect confirmed) -> analytics
+// page shows the click. Login uses a seeded JWT rather than a real Google OAuth round trip -
+// see auth-helper.ts for why and how.
 test('login, create a link, follow it, see the click in analytics', async ({ page, request }) => {
   const email = `e2e-${Date.now()}@example.com`;
   await loginAs(page, email);
 
   // Now on the Dashboard, authenticated.
   await expect(page.getByText(email)).toBeVisible();
+  await expectNoSeriousA11yViolations(page);
 
   const targetUrl = `https://example.com/e2e-target-${Date.now()}`;
   await page.getByLabel('URL').fill(targetUrl);
@@ -35,10 +53,12 @@ test('login, create a link, follow it, see the click in analytics', async ({ pag
   await page.getByRole('link', { name: 'Analytics' }).first().click();
   await expect(page.getByText('total clicks')).toBeVisible();
   await expect(page.locator('p.text-4xl')).toHaveText('1');
+  await expectNoSeriousA11yViolations(page);
 });
 
 test('unauthenticated visitor is redirected to /login', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible();
+  await expectNoSeriousA11yViolations(page);
 });

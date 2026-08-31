@@ -3,7 +3,8 @@ import { execFileSync } from 'node:child_process';
 import type { Page } from '@playwright/test';
 
 // E2E can't drive a real Google OAuth consent screen (no real Google account is available in
-// this environment - see docs/stage-4-authentication.md). Instead, this mints a real,
+// this environment - see CLAUDE.md's Troubleshooting section, "Sign in with Google" entry).
+// Instead, this mints a real,
 // correctly-signed JWT using the SAME JWT_SECRET the locally-running backend verifies against
 // (read from apps/api/.env), and seeds it directly into the frontend's localStorage the same
 // way AuthCallback.tsx would after a real login - the token is genuinely verified server-side
@@ -22,7 +23,7 @@ function readJwtSecret(): string {
   const content = fs.readFileSync(envPath, 'utf-8');
   const match = content.match(/^JWT_SECRET=(.+)$/m);
   if (!match) {
-    throw new Error(`JWT_SECRET not found in ${envPath} - is the backend .env set up? See docs/stage-4-authentication.md.`);
+    throw new Error(`JWT_SECRET not found in ${envPath} - is the backend .env set up? See CLAUDE.md.`);
   }
   return match[1].trim();
 }
