@@ -13,20 +13,20 @@ const GOOGLEBOT_UA =
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let prisma: {
+    $queryRaw: jest.Mock;
     click: {
       create: jest.Mock;
       count: jest.Mock;
-      findMany: jest.Mock;
       groupBy: jest.Mock;
     };
   };
 
   beforeEach(async () => {
     prisma = {
+      $queryRaw: jest.fn(),
       click: {
         create: jest.fn(),
         count: jest.fn(),
-        findMany: jest.fn(),
         groupBy: jest.fn(),
       },
     };
@@ -137,10 +137,10 @@ describe('AnalyticsService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       prisma.click.count.mockResolvedValue(42);
-      prisma.click.findMany.mockResolvedValue([
-        { clickedAt: new Date('2026-08-20T09:00:00.000Z') },
-        { clickedAt: new Date('2026-08-20T15:00:00.000Z') },
-        { clickedAt: new Date('2026-08-19T09:00:00.000Z') },
+      // getLinkAnalytics now buckets per day in SQL - the mock returns the aggregated rows.
+      prisma.$queryRaw.mockResolvedValue([
+        { day: '2026-08-20', count: 2n },
+        { day: '2026-08-19', count: 1n },
       ]);
       prisma.click.groupBy.mockImplementation(({ by }: { by: string[] }) => {
         if (by[0] === 'referrer') {
@@ -194,7 +194,7 @@ describe('AnalyticsService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       prisma.click.count.mockResolvedValue(0);
-      prisma.click.findMany.mockResolvedValue([]);
+      prisma.$queryRaw.mockResolvedValue([]);
       prisma.click.groupBy.mockResolvedValue([]);
 
       const result = await service.getLinkAnalytics('link-empty');

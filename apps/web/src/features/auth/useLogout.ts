@@ -1,7 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
-import { queryClient } from '@/lib/query-client';
 import { useAuthStore } from '@/stores/auth.store';
 
 // Revokes the current token server-side (POST /auth/logout - see auth.controller.ts) before
@@ -11,6 +10,7 @@ import { useAuthStore } from '@/stores/auth.store';
 // success and error path - a failed revoke call (e.g. network hiccup, or the token already
 // expired) must never leave the user stuck unable to sign out of their own browser.
 export function useLogout() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiClient.post<void>('/auth/logout', {}),
     onError: () => {

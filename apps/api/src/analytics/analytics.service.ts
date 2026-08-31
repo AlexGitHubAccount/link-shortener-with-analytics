@@ -97,20 +97,21 @@ export class AnalyticsService {
   }
 
   async getLinkAnalytics(linkId: string): Promise<LinkAnalytics> {
-    const [totalClicks, clicksInWindow, referrerGroups, deviceGroups] =
+    const windowStart = new Date(
+      Date.now() - CLICKS_BY_DAY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const [totalClicks, clicksByDayRows, referrerGroups, deviceGroups] =
       await Promise.all([
         this.prisma.click.count({ where: { linkId } }),
-        this.prisma.click.findMany({
-          where: {
-            linkId,
-            clickedAt: {
-              gte: new Date(
-                Date.now() - CLICKS_BY_DAY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-              ),
-            },
-          },
-          select: { clickedAt: true },
-        }),
+        // Aggregate per UTC day in SQL rather than loading every click row from the window into
+        // Node just to bucket it - Click is the fastest-growing table, and a viral link can do
+        // millions of clicks a month. This returns O(days) rows.
+        this.prisma.$queryRaw<Array<{ day: string; count: bigint }>>`
+          SELECT to_char("clickedAt", 'YYYY-MM-DD') AS day, count(*) AS count
+          FROM "Click"
+          WHERE "linkId" = ${linkId} AND "clickedAt" >= ${windowStart}
+          GROUP BY 1
+        `,
         this.prisma.click.groupBy({
           by: ['referrer'],
           where: { linkId, referrer: { not: null } },
@@ -126,9 +127,8 @@ export class AnalyticsService {
       ]);
 
     const countsByDate = new Map<string, number>();
-    for (const click of clicksInWindow) {
-      const dateKey = click.clickedAt.toISOString().slice(0, 10);
-      countsByDate.set(dateKey, (countsByDate.get(dateKey) ?? 0) + 1);
+    for (const row of clicksByDayRows) {
+      countsByDate.set(row.day, Number(row.count));
     }
     const clicksByDay = buildUtcDateRange(CLICKS_BY_DAY_WINDOW_DAYS).map(
       (date) => ({ date, count: countsByDate.get(date) ?? 0 }),

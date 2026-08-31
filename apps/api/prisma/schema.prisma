@@ -37,7 +37,10 @@ model Link {
 
   clicks Click[]
 
-  @@index([userId])
+  // Composite, not just @@index([userId]): LinksService.findAll filters by userId AND orders by
+  // createdAt desc with skip/take - one index scan serves filter + sort + pagination. The
+  // leftmost prefix (userId) still covers any userId-only lookup, so no separate index needed.
+  @@index([userId, createdAt])
 }
 
 model Click {

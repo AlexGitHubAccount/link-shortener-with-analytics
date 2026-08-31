@@ -1,11 +1,18 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind the nginx /api/* proxy (see apps/web/nginx.conf.template), Express only sees nginx's
+  // IP unless it is told to trust the proxy. ThrottlerGuard keys its per-IP buckets on req.ip
+  // (RedirectController, LinksController.create) - without this, every proxied request shares
+  // one global bucket and one client can rate-limit everyone. '1' = trust exactly one proxy hop.
+  app.set('trust proxy', 1);
 
   // Runs PrismaService.onModuleDestroy() (closes the DB connection cleanly) and every other
   // module's shutdown hook on SIGTERM/SIGINT - without this, NestJS never calls them at all, so
@@ -35,9 +42,11 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  // No `credentials: true` - the API is Bearer-token only (no auth cookies), so allowing
+  // credentialed cross-origin requests would only be a silent impact amplifier if the origin
+  // allowlist were ever widened.
   app.enableCors({
     origin: allowedOrigins,
-    credentials: true,
   });
 
   // Global validation pipe
