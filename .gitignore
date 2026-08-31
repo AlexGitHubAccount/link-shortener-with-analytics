@@ -51,3 +51,4 @@ apps/e2e/.cache/
 .cache/
 .eslintcache
 *.tsbuildinfo
+.claude/.push-gate-passed

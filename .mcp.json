@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://linkshortener:linkshortener@localhost:5432/linkshortener"
+      ],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {}
+    },
+    "docker": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "docker-mcp"],
+      "env": {}
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp"],
+      "env": {}
+    },
+    "github": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-p",
+        "127.0.0.1:8085:8085",
+        "-e",
+        "GITHUB_OAUTH_CALLBACK_PORT=8085",
+        "-e",
+        "GITHUB_TOOLSETS=all",
+        "ghcr.io/github/github-mcp-server"
+      ]
+    }
+  }
+}
