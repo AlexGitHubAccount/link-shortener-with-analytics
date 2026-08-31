@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Logger,
   NotFoundException,
   Post,
   Req,
@@ -12,7 +13,12 @@ import { randomUUID } from 'node:crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '@link-shortener/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,6 +31,8 @@ import type { JwtPayload, RequestUser } from './strategies/jwt.strategy';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
@@ -43,6 +51,7 @@ export class AuthController {
       'Revoke the current token server-side (real logout, not just a client-side clear)',
   })
   @ApiBearerAuth()
+  @ApiResponse({ status: 204, description: 'Token revoked (no content)' })
   @Post('logout')
   @HttpCode(204)
   @UseGuards(JwtAuthGuard)
@@ -65,9 +74,19 @@ export class AuthController {
     });
     // Lazy cleanup of rows whose own token already expired anyway - piggybacks on a real
     // logout request rather than needing a separate cron job at this project's scale.
-    await this.prisma.revokedToken.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
+    // Best-effort: the token is already revoked by the upsert above, so a cleanup failure
+    // must not turn a successful logout into a 500. Log and move on (cf. AnalyticsService.recordClick).
+    try {
+      await this.prisma.revokedToken.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Lazy RevokedToken cleanup failed (logout still succeeded): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   // Frontend calls this right after picking up the token from the callback redirect, to get

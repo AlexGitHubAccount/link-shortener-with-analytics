@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { RedirectThrottlerGuard } from './redirect-throttler.guard';
 import { LinksService } from '../links/links.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
@@ -18,12 +18,14 @@ import { AnalyticsService } from '../analytics/analytics.service';
 // auth-guard checks the way the private /links endpoints will (Stage 4).
 //
 // This is also the ONE endpoint in the app with no JwtAuthGuard - anyone can hit it, and every
-// hit writes a Click row. @UseGuards(ThrottlerGuard) opts it into the ThrottlerModule limits
-// registered in app.module.ts (found missing entirely during a push-gate security-reviewer
-// scope review) without throttling any of the authenticated dashboard traffic elsewhere.
+// hit writes a Click row. @UseGuards(RedirectThrottlerGuard) opts it into the ThrottlerModule
+// limits registered in app.module.ts (found missing entirely during a push-gate
+// security-reviewer scope review) without throttling any of the authenticated dashboard
+// traffic elsewhere. RedirectThrottlerGuard keys on the socket address, not req.ip, because
+// this route is not behind the trusted proxy - see that file.
 @ApiTags('redirect')
 @Controller()
-@UseGuards(ThrottlerGuard)
+@UseGuards(RedirectThrottlerGuard)
 export class RedirectController {
   // referer/user-agent are unauthenticated, attacker-controlled request headers persisted
   // verbatim into every Click row. Cap them so a caller can't use the analytics write to stuff
