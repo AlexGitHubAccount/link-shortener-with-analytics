@@ -55,7 +55,7 @@ description: Гейт перед push — один полный проход д�
 Скрипт гонит ДО КОНЦА, не обрываясь на первой красной:
 1. `pnpm lint` (весь монорепо)
 2. `pnpm exec turbo run type-check --filter="...[$diffBase]"` (affected)
-3. `pnpm exec turbo run test --filter="...[$diffBase]"` (affected — включая вновь написанные)
+3. `pnpm exec turbo run test:cov --filter="...[$diffBase]"` (affected — `test:cov`, не `test`: CI enforce'ит порог покрытия 80%)
 4. `pnpm exec turbo run build --filter="...[$diffBase]"` (affected)
 5. Скан секретов по добавленным строкам диапазона (regex; `.env.example` и `*.md` исключены)
 

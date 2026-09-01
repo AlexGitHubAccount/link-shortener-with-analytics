@@ -51,8 +51,11 @@ run_check lint pnpm lint
 
 # 2/3/4. Type-check, unit-тесты и build — только пакеты, затронутые диапазоном.
 #   Синтаксис turbo "affected since ref": --filter="...[<ref>]" (подтверждено по turbo docs).
+#   Тесты гоняем через `test:cov`, а НЕ `test` — CI (ci.yml) enforce'ит порог покрытия 80%
+#   (jest.coverageThreshold / vitest.config.ts), и голый `test` его не проверяет: гейт бы
+#   пропустил падение, которое CI ловит (так и случилось однажды — branches 79.9% < 80%).
 run_check type-check pnpm exec turbo run type-check --filter="...[${DIFF_BASE}]"
-run_check test       pnpm exec turbo run test       --filter="...[${DIFF_BASE}]"
+run_check test:cov   pnpm exec turbo run test:cov   --filter="...[${DIFF_BASE}]"
 run_check build      pnpm exec turbo run build      --filter="...[${DIFF_BASE}]"
 
 # 5. Скан секретов по добавленным строкам диапазона.
@@ -87,7 +90,7 @@ for line in "${RESULTS[@]}"; do
   echo "$line"
 done
 echo
-for name in lint type-check test build secret-scan; do
+for name in lint type-check test:cov build secret-scan; do
   case " ${RESULTS[*]} " in
     *"CHECK ${name} FAIL"*)
       echo "----- ${name} log (last 40) -----"
