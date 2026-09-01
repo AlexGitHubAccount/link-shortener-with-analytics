@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { Logger, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
@@ -189,6 +189,51 @@ describe('AuthController', () => {
 
       expect(prismaService.revokedToken.upsert).not.toHaveBeenCalled();
       expect(prismaService.revokedToken.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('defaults expiresAt to now + 24h when the token carries no exp claim', async () => {
+      const now = new Date('2026-09-01T00:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
+      const req = buildReq({
+        userId: 'user-1',
+        email: 'user@example.com',
+        jti: 'token-noexp',
+      });
+
+      await controller.logout(req);
+
+      expect(prismaService.revokedToken.upsert).toHaveBeenCalledWith({
+        where: { jti: 'token-noexp' },
+        create: {
+          jti: 'token-noexp',
+          expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        },
+        update: {},
+      });
+      jest.useRealTimers();
+    });
+
+    it('still succeeds (does not throw) when the lazy revoked-token sweep fails', async () => {
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      prismaService.revokedToken.deleteMany.mockRejectedValueOnce(
+        new Error('db unavailable'),
+      );
+      const req = buildReq({
+        userId: 'user-1',
+        email: 'user@example.com',
+        jti: 'token-abc',
+        exp: 1900000000,
+      });
+
+      await expect(controller.logout(req)).resolves.toBeUndefined();
+
+      expect(prismaService.revokedToken.upsert).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Lazy RevokedToken cleanup failed'),
+      );
+      warn.mockRestore();
     });
   });
 });
