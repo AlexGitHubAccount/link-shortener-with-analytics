@@ -89,7 +89,7 @@ describe('JwtStrategy', () => {
       const result = await strategy.validate({
         sub: 'user-456',
         email: '',
-        jti: undefined as unknown as string,
+        jti: undefined,
       });
 
       expect(findUnique).not.toHaveBeenCalled();

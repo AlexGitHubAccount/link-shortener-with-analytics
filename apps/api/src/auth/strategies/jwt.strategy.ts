@@ -8,14 +8,16 @@ import { getRequiredJwtSecret } from '../jwt-secret';
 export interface JwtPayload {
   sub: string; // user id
   email: string;
-  jti: string; // unique per issued token - what a logout revokes, see RevokedToken
+  // Unique per issued token - what a logout revokes, see RevokedToken. Optional: tokens issued
+  // before this field existed have no jti (handled as a no-op in validate() below).
+  jti?: string;
   exp?: number; // seconds since epoch, set automatically by JwtModule at sign time
 }
 
 export interface RequestUser {
   userId: string;
   email: string;
-  jti: string;
+  jti?: string;
   exp?: number;
 }
 

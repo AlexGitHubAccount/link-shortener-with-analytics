@@ -100,36 +100,36 @@ export class AnalyticsService {
     const windowStart = new Date(
       Date.now() - CLICKS_BY_DAY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     );
-    // $transaction (not Promise.all) so the four reads share one consistent snapshot - under
-    // concurrent Click writes, totalClicks would otherwise be able to disagree with the sums of
-    // clicksByDay / deviceBreakdown in the same response.
+    // Plain Promise.all, not an interactive $transaction: parallel queries on a single
+    // transaction connection are a Prisma anti-pattern (they can intermittently error under
+    // load), and READ COMMITTED - PostgreSQL's default - gives each statement its own snapshot
+    // anyway, so the transaction bought no real consistency. A few clicks of skew between
+    // totalClicks and the day buckets on a dashboard read is not a correctness problem.
     const [totalClicks, clicksByDayRows, referrerGroups, deviceGroups] =
-      await this.prisma.$transaction((tx) =>
-        Promise.all([
-          tx.click.count({ where: { linkId } }),
-          // Aggregate per UTC day in SQL rather than loading every click row from the window into
-          // Node just to bucket it - Click is the fastest-growing table, and a viral link can do
-          // millions of clicks a month. This returns O(days) rows.
-          tx.$queryRaw<Array<{ day: string; count: bigint }>>`
-            SELECT to_char("clickedAt", 'YYYY-MM-DD') AS day, count(*) AS count
-            FROM "Click"
-            WHERE "linkId" = ${linkId} AND "clickedAt" >= ${windowStart}
-            GROUP BY 1
-          `,
-          tx.click.groupBy({
-            by: ['referrer'],
-            where: { linkId, referrer: { not: null } },
-            _count: true,
-            orderBy: { _count: { referrer: 'desc' } },
-            take: 5,
-          }),
-          tx.click.groupBy({
-            by: ['deviceType'],
-            where: { linkId },
-            _count: true,
-          }),
-        ]),
-      );
+      await Promise.all([
+        this.prisma.click.count({ where: { linkId } }),
+        // Aggregate per UTC day in SQL rather than loading every click row from the window into
+        // Node just to bucket it - Click is the fastest-growing table, and a viral link can do
+        // millions of clicks a month. This returns O(days) rows.
+        this.prisma.$queryRaw<Array<{ day: string; count: bigint }>>`
+          SELECT to_char("clickedAt", 'YYYY-MM-DD') AS day, count(*) AS count
+          FROM "Click"
+          WHERE "linkId" = ${linkId} AND "clickedAt" >= ${windowStart}
+          GROUP BY 1
+        `,
+        this.prisma.click.groupBy({
+          by: ['referrer'],
+          where: { linkId, referrer: { not: null } },
+          _count: true,
+          orderBy: { _count: { referrer: 'desc' } },
+          take: 5,
+        }),
+        this.prisma.click.groupBy({
+          by: ['deviceType'],
+          where: { linkId },
+          _count: true,
+        }),
+      ]);
 
     const countsByDate = new Map<string, number>();
     for (const row of clicksByDayRows) {

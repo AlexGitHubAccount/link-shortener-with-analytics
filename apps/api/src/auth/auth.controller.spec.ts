@@ -182,7 +182,7 @@ describe('AuthController', () => {
       const req = buildReq({
         userId: 'user-1',
         email: 'user@example.com',
-        jti: undefined as unknown as string,
+        jti: undefined,
       });
 
       await controller.logout(req);
