@@ -1,13 +1,13 @@
 ---
 name: push-gate
-description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + один advisory-проход code-review. Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
+description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-проход code-review (и security-review, если диапазон трогает auth-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
 ---
 
 # push-gate
 
 Детерминированный, предсказуемый гейт перед push. **Никакого цикла автопочинки, никаких
-автономных коммитов, никакого спавна множества агентов.** Один проход проверок → отчёт →
-человек и Claude чинят вместе → повторный прогон → push.
+автономных коммитов.** Один проход проверок + до двух advisory-ревьюеров (без имени) →
+отчёт → человек и Claude чинят вместе → повторный прогон → push.
 
 Диапазон для ревью — **все локальные коммиты, которых ещё нет на remote**: `@{u}..HEAD`,
 если апстрим настроен, иначе merge-base с `origin/main` (первый push новой ветки).
@@ -65,19 +65,41 @@ description: Гейт перед push — один полный проход д�
 Полная регрессия (весь `pnpm test`, E2E, `pnpm build` целиком) сюда НЕ входит — это работа
 CI (`.github/workflows/ci.yml`).
 
-## Шаг 2: advisory code-review (один субагент, один проход)
+## Шаг 2: advisory-ревью (субагенты БЕЗ имени, один проход)
 
-Запустить РОВНО ОДИН фоновый субагент:
-`Agent({ subagent_type: 'code-reviewer', prompt: '<diffRange подставить>' })` — **без `name`**
-(при включённых Agent Teams именованный субагент стал бы тиммейтом; здесь это не нужно).
+**Все субагенты здесь — без `name`** (при включённых Agent Teams именованный субагент стал бы
+тиммейтом; здесь это не нужно). Максимум два: один всегда, второй — по условию.
+
+### 2.1 code-reviewer — всегда
+
+`Agent({ subagent_type: 'code-reviewer', prompt: ... })`
 
 Промпт: «Review the not-yet-pushed commits. Range: `${diffRange}`. Follow your own scope.
 Return findings via this schema: `{ findings: [{ file, line, summary, severity }] }` (severity
 ∈ high|medium|low), max 10, empty array if clean.»
 
-Это **совет, не гейт**: если субагент упал / вышел по `maxTurns` / вернул мусор — записать
-«code-review: skipped/failed» и идти дальше. Push решают детерминированные проверки Шага 1,
-не эта находка. НЕ перезапускать субагент, НЕ спавнить второй.
+### 2.2 security-reviewer — только если диапазон трогает security-поверхность
+
+`git diff ${diffRange} --name-only` — если хоть один файл под одним из путей:
+`apps/api/src/auth/`, `apps/api/src/common/guards/`, `apps/api/src/common/decorators/`,
+`apps/api/src/main.ts`, `apps/api/src/redirect/`, `apps/web/src/features/auth/`,
+`apps/web/src/stores/auth.store.ts`, `apps/web/src/lib/api-client.ts` —
+запустить вторым субагентом (тоже без имени):
+
+`Agent({ subagent_type: 'security-reviewer', prompt: ... })`
+
+Промпт: «Review the security-sensitive surface touched by the not-yet-pushed commits. Range:
+`${diffRange}`. Follow your own scope (the eight areas). Return findings via this schema:
+`{ findings: [{ file, line, summary, severity }] }` (severity ∈ high|medium|low), max 10,
+empty array if clean.»
+
+Можно запускать 2.1 и 2.2 параллельно.
+
+### Общее
+
+Это **совет, не гейт по себе**: если субагент упал / вышел по `maxTurns` / вернул мусор —
+записать «<reviewer>: skipped/failed» и идти дальше. НЕ перезапускать, НЕ спавнить третий.
+Но находка `severity: high` от ЛЮБОГО из двух блокирует push (см. Шаг 4).
 
 ## Шаг 3: единый отчёт пользователю
 
@@ -85,7 +107,8 @@ Return findings via this schema: `{ findings: [{ file, line, summary, severity }
 - Таблица `CHECK` из Шага 1 (что PASS, что FAIL).
 - Для каждой FAIL — что именно сломалось (из хвоста лога), где, почему это важно,
   направление фикса. **Подробно** — пользователь по этому отчёту принимает решения.
-- Находки code-review Шага 2 (если были), сгруппированные по severity.
+- Находки Шага 2 (`code-reviewer` и, если запускался, `security-reviewer`), сгруппированные
+  по severity, с пометкой от какого ревьюера.
 
 ## Шаг 4: решение
 
@@ -107,13 +130,15 @@ Return findings via this schema: `{ findings: [{ file, line, summary, severity }
   2. Показать полный отчёт Шага 3.
   3. Дальше разбираем и чиним вместе с пользователем в основной сессии (обычными Edit/Bash,
      не автономным агентом). После правок — повторный `/push-gate`.
-  4. Для особо чувствительного диапазона (auth) можно предложить `/code-review ultra`
-     (платно, инициирует пользователь) — этот skill его не запускает.
+  4. Если `security-reviewer` (Шаг 2.2) вернул `high` — **настоятельно** предложить
+     `/code-review ultra` перед повторной попыткой (глубокое облачное ревью auth, платно,
+     инициирует пользователь). Для обычных `high` — просто чиним и перезапускаем.
 
 ## Что этот skill НЕ делает
 
 - Не правит код и не коммитит фиксы (кроме doc-sync коммита на чистом прогоне).
 - Не генерирует недостающие тесты (это работа `test-engineer` в `/feature`, не гейта).
 - Не крутит цикл «нашли → починили → перепроверили».
-- Не запускает больше одного субагента.
+- Не запускает больше двух субагентов (`code-reviewer` всегда + `security-reviewer` по
+  условию), оба без имени, один проход.
 - Не гоняет полную регрессию/E2E (это CI).

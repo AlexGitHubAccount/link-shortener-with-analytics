@@ -8,16 +8,18 @@
 
 Детерминированный, предсказуемый, **только отчёт** — сам код не правит и не коммитит. Один
 полный проход проверок → человек и Claude чинят находки вместе → повторный прогон → push.
-Никакого цикла автопочинки, никакого спавна множества агентов, один advisory-субагент на
-проход.
+Никакого цикла автопочинки, никаких автономных коммитов. Advisory-ревью: `code-reviewer`
+всегда + `security-reviewer` (если диапазон трогает auth-поверхность), оба субагентами без
+имени, один проход. Находка `severity: high` от любого блокирует push.
 
 | Файл | Тип | Когда | Что делает |
 |---|---|---|---|
 | `settings.json` | конфиг | всегда | (1) Регистрирует `PreToolUse`-hook (перед каждым Bash). (2) `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — включает Agent Teams (см. ниже). (3) `permissions.deny` — Claude не читает `.env`/`.env.local`/`.env.*.local` (`.env.example` читаем). Зеркалит `.gitignore`. |
 | `hooks/push-gate.sh` | hook | реагирует на `git commit` и `git push` отдельно | Два гейта по весу: (1) `git commit` → быстрый `pnpm lint` (без AI, коммитить можно свободно); (2) `git push` → проверка одноразовой расписки `.claude/.push-gate-passed` (sha256 диапазона `@{u}..HEAD`). Нет расписки → push блокируется с указанием запустить `/push-gate`. Хук расписку не создаёт — только проверяет. |
 | `hooks/quality-checks.sh` | shell-скрипт | вызывается из skill'а `push-gate` | Один полный проход, никогда не обрывается на первой красной: `pnpm lint` · affected `type-check` · affected `test` · affected `build` · скан секретов по добавленным строкам. Вывод — `CHECK <name> PASS/FAIL` + хвосты логов + `GATE PASS/FAIL`. |
-| `skills/push-gate/SKILL.md` | skill `push-gate` | сам, когда hook отклонил push (или вручную `/push-gate`) | Оркестратор: диапазон → `quality-checks.sh` → ОДИН advisory-субагент `code-reviewer` → единый отчёт человеку → при `GATE PASS` и без high-находок: doc-sync + расписка + `git push`; иначе — стоп, чиним вместе. **Точка входа для человека.** |
-| `agents/code-reviewer.md` | agent | вызывается из skill'а `push-gate` (без имени, один проход) | Лёгкое diff-scoped ревью: корректность + явная безопасность + конвенции проекта. Только высокая уверенность, ≤10 находок по схеме. Не фиксер. Advisory — не блокирует push сам по себе. |
+| `skills/push-gate/SKILL.md` | skill `push-gate` | сам, когда hook отклонил push (или вручную `/push-gate`) | Оркестратор: диапазон → `quality-checks.sh` → advisory-субагенты без имени (`code-reviewer` всегда + `security-reviewer` на auth-поверхности) → единый отчёт человеку → при `GATE PASS` и без `high`-находок: doc-sync + расписка + `git push`; иначе — стоп, чиним вместе. **Точка входа для человека.** |
+| `agents/code-reviewer.md` | agent (без имени, один проход) | из `push-gate` и `feature` | Лёгкое diff-scoped ревью: корректность + явная безопасность + конвенции. ≤10 находок по схеме. Не фиксер. `high` блокирует push. |
+| `agents/security-reviewer.md` | agent (без имени, по условию) | из `push-gate` и `feature`, когда диапазон трогает `auth/` · `common/guards\|decorators/` · `main.ts` · `redirect/` · `web/src/features/auth/` · `auth.store.ts` · `api-client.ts` | Узкий глубокий проход по 8 security-областям (JWT-подпись/отзыв, IDOR/скоупинг, CORS+helmet+ValidationPipe, публичный redirect, утечка секретов) + Semgrep. Не фиксер. `high` блокирует push; при `high` рекомендуется `/code-review ultra`. |
 
 Полная регрессия (весь тест-сьют, E2E, `pnpm build` целиком) в гейт **не входит** — это
 работа CI (`.github/workflows/ci.yml`, job `e2e` через `needs:` после `lint-type-test-build`).
@@ -36,14 +38,20 @@
 
 | Файл | Роль | Зона |
 |---|---|---|
-| `skills/feature/SKILL.md` | skill `/feature <описание>` — плейбук ведущего | план с закреплением файлов → спавн тиммейтов → координация → `code-reviewer` → `/push-gate` |
+| `skills/feature/SKILL.md` | skill `/feature <описание>` — плейбук ведущего | архитектурные решения (Шаг 1.2) → план с закреплением файлов → спавн тиммейтов → координация → ревьюеры без имени → `/push-gate` |
 | `agents/backend-dev.md` | тиммейт-разработчик бэкенда | `apps/api/src/**`, `apps/api/prisma/**`, миграции |
 | `agents/frontend-dev.md` | тиммейт-разработчик фронтенда | `apps/web/src/**` |
 | `agents/test-engineer.md` | тиммейт-инженер по тестам | Jest / Vitest+RTL / Playwright, порог покрытия 80% |
 
-Ревью после готовности фичи — тот же `code-reviewer`, что и в гейте (лид запускает его
-субагентом без имени). Для особо чувствительного диапазона (auth) — встроенный
-`/code-review high`/`ultra`, запускает пользователь.
+**Архитектор — это лид (основная сессия), не отдельный агент.** Решения о контракте, модели
+данных, миграциях и security-постуре — точки стыковки между тиммейтами, их принимает
+координатор (`/feature` Шаг 1.2). **DevOps отдельной ролью нет** — CI/Docker/деплой трогают
+инфра-файлы редко, это лид напрямую или разовый субагент.
+
+Ревью после готовности фичи (`/feature` Шаг 4) — те же `code-reviewer` (всегда) и
+`security-reviewer` (на auth-поверхности), что и в гейте, субагентами без имени. Для особо
+чувствительного диапазона (auth) — `/code-review high`/`ultra`, запускает пользователь; при
+`high` от `security-reviewer` это рекомендуется прямо.
 
 ---
 
