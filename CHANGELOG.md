@@ -13,6 +13,22 @@
 теги закончились — дальше запись в этом файле появляется на каждый коммит (единицу
 работы), без номера, датой.
 
+## CI покраснел на пороге покрытия сразу после первого push — починка + закрытие дыры в гейте (2026-09-01)
+
+Первый прогон `ci.yml` на GitHub упал: `test:cov` → branch coverage 79.9% при пороге 80%
+(`jest.coverageThreshold`). Детерминированный `quality-checks.sh` этого не поймал, потому
+что гонял `turbo run test`, а НЕ `test:cov` — порог покрытия в голом `test` не проверяется.
+
+- **Причина просадки**: правка advisory-находки (`5e354f6`) убрала ветку `$transaction` в
+  `analytics.service`, а коммиты переработки `.claude/` (`1cc4d6e`) добавили пару мелких
+  веток в `main.ts`/`links.service.ts`/`redirect.controller.ts` без тестов — суммарно
+  branch coverage сполз с ~80.6% до 79.9%.
+- **Починка**: три реальных теста на непокрытые ветки `AuthController.logout` (токен без
+  `exp` → `expiresAt` = now + 24ч; падение ленивой очистки `RevokedToken` → логаут всё
+  равно успешен, пишется warning). Branch coverage → 80.86%.
+- **Закрытие дыры**: `quality-checks.sh` теперь гоняет `test:cov`, а не `test` — гейт
+  enforce'ит ровно тот порог, что и CI. Обновлён и `skills/push-gate/SKILL.md`.
+
 ## Первый push всей post-Stage-8 работы на remote (2026-09-01)
 
 Вся работа после Этапа 8 (Tier 0, production Docker, слияние CI, рефактор `.claude/`,
