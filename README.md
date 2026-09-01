@@ -1,6 +1,7 @@
 # Link Shortener with Analytics
 
 [![CI](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AlexGitHubAccount/link-shortener-with-analytics?sort=semver)](https://github.com/AlexGitHubAccount/link-shortener-with-analytics/releases)
 
 Учебный монорепозиторий для освоения Claude Code: сокращатель ссылок с детальной аналитикой (фиксация кликов, анализ referrer, разбор User-Agent). Построен от начала до конца как практическое упражнение по Claude Code в рамках корпоративного учебного курса.
 

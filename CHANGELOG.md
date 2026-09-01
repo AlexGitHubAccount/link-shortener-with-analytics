@@ -11,7 +11,45 @@
 тегом `stage-N-done`, `git show stage-N-done` или `git log` покажет всё, что не попало в
 этот сжатый пересказ. С записи «Автоматизация: commit-gate заменяет stage-review» этапы и
 теги закончились — дальше запись в этом файле появляется на каждый коммит (единицу
-работы), без номера, датой.
+работы), без номера, датой. Датированные записи остаются единицей работы; заголовок
+`## [x.y.z]` появляется отдельно, в момент релиза, как якорь версии (semver: MAJOR —
+ломающее, MINOR — фича, PATCH — багфикс) с git-тегом `vX.Y.Z` и GitHub Release.
+
+## [1.0.0] — 2026-09-01
+
+Первый готовый к выпуску срез. Все 8 запланированных этапов закрыты, плюс post-Stage-8
+production-подготовка (Tier 0) и переработка тулинга. `main` на GitHub, CI зелёный
+(`lint-type-test-build` + `e2e`), тег `v1.0.0`.
+
+**Что входит:**
+
+- **Backend** (NestJS + Prisma + PostgreSQL): CRUD ссылок, публичный редирект `GET /:code`
+  с fire-and-forget записью клика, аналитика (`GET /links/:id/analytics` — агрегация в SQL,
+  парсинг User-Agent), Google OAuth + JWT со server-side отзывом токена (`RevokedToken`),
+  скоупинг всех приватных эндпоинтов по `@CurrentUser()`, Swagger `/api/docs` (отключён в
+  проде). Tier 0 hardening: `helmet`, CORS через `ALLOWED_ORIGINS`, `ThrottlerGuard` на
+  публичных путях, Joi-валидация env на старте, graceful shutdown.
+- **Frontend** (Vite + React 19 + TanStack Query + shadcn/ui + Tailwind v4): Dashboard,
+  создание ссылки (react-hook-form + zod), список, страница аналитики с графиками (recharts),
+  server-side логаут.
+- **Инфраструктура**: pnpm workspace + Turborepo, dev-Postgres в docker-compose,
+  production-образы `apps/api/Dockerfile` + `apps/web/Dockerfile` (собраны и прогнаны в
+  связке), GitHub Actions CI (`lint · type-check · test:cov 80% · build · pnpm audit`, затем
+  `e2e` с Playwright + `@axe-core` a11y-сканом), детерминированный `push-gate` (гейт-зеркало
+  CI перед push), команда разработки на Agent Teams (`/feature`).
+- **Тесты**: Jest (api) + Vitest/RTL (web) + Playwright (e2e), покрытие ≥80% по всем 4
+  метрикам.
+
+**Известные ограничения 1.0.0:**
+
+- **CD не настроен** — реального деплоя куда-либо нет; выбор платформы (Fly.io/Railway/VPS)
+  и разворачивание — за пользователем. CI пока только проверяет, не деплоит.
+- Google OAuth требует реальных кредов из Google Cloud Console (в дефолтном `.env` их нет —
+  всё, кроме кнопки «Sign in with Google», работает без них).
+- Branch protection на `main` сознательно не включён — соло-репозиторий, `push-gate` +
+  прямой push (см. `CHANGELOG` ниже про обсуждение).
+
+Полная детализация — в датированных записях ниже (они и есть история пути к 1.0.0).
 
 ## CI покраснел на пороге покрытия сразу после первого push — починка + закрытие дыры в гейте (2026-09-01)
 
