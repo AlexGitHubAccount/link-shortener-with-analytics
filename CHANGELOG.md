@@ -15,6 +15,44 @@
 `## [x.y.z]` появляется отдельно, в момент релиза, как якорь версии (semver: MAJOR —
 ломающее, MINOR — фича, PATCH — багфикс) с git-тегом `vX.Y.Z` и GitHub Release.
 
+## Команда упрощена до 1 + 2 + 2: security + devops слиты в один `devsecops-reviewer` (2026-09-02)
+
+Продолжение разбора состава. Предыдущая итерация (запись ниже) вернула `security-reviewer`
+и добавила `test-engineer` тиммейтом — по факту вышло избыточно для соло-проекта такого
+масштаба. Ужали до минимальной оси с чёткими непересекающимися зонами:
+
+- **`test-engineer` убран как тиммейт.** «You build it, you test it»: `backend-dev` пишет
+  свои `*.spec.ts`, `frontend-dev` — свои `*.test.tsx`, каждый держит порог покрытия 80% на
+  своём слое (проверяется `test:cov` в `push-gate` и CI). Минус один участник, минус
+  зависимость «жду и be, и fe». E2E (`apps/e2e/**`) — кросс-слойное, закрепляется ЯВНО за
+  одним тиммейтом в задаче либо делает лид. Оба dev-агента (`agents/backend-dev.md`,
+  `frontend-dev.md`) получили секцию «Тесты — ваши» с правилами из бывшего `test-engineer.md`.
+- **`security-reviewer` + предложенный отдельный `devops` слиты в `devsecops-reviewer`.**
+  Практика DevSecOps: security встроена в тот же путь доставки, что и код — один ревьюер,
+  два внутренних прохода, каждый включается только если diff задел его зону:
+  - **security-проход** — прежние 8 областей + Semgrep (триггер: `auth/`, `common/guards|
+    decorators/`, `main.ts`, `redirect/`, FE `features/auth/` / `auth.store.ts` /
+    `api-client.ts`).
+  - **devops-проход** — env-переменная во всех местах сразу (Joi-схема + `ci.yml` +
+    `.env.example` + Dockerfile), `allowBuilds`/lockfile-синхрон, `dependsOn: ["^build"]`
+    для новых turbo-задач, Docker-контекст/`.dockerignore`, CI-обвязка, `pnpm audit`
+    (триггер: `.github/workflows/`, `Dockerfile*`, `nginx.conf.template`, `docker-compose.yml`,
+    `turbo.json`, `.dockerignore`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, любой
+    `package.json`, `config/env.validation.ts`).
+
+  Находки помечаются `[security]`/`[devops]`; `high` от любого прохода блокирует push, при
+  `[security] high` рекомендуется `/code-review ultra`. Это по-прежнему субагент **без
+  имени** (не тиммейт), схема вывода не изменилась.
+- **Роль архитектора/DevOps остаётся на лиде.** Инфра-файлы правит лид напрямую (редкие,
+  кросс-слойные), `devsecops-reviewer` их проверяет. `feature/SKILL.md` Шаг 1.2 получил
+  пункт «Инфра / путь в прод» и требование выдавать одну строку threat-модели на
+  auth-фичах.
+
+Затронуты: `agents/devsecops-reviewer.md` (новый, заменил `security-reviewer.md`),
+`agents/test-engineer.md` (удалён), `agents/backend-dev.md` / `frontend-dev.md` (секция
+тестов), `agents/code-reviewer.md`, `skills/push-gate/SKILL.md`, `skills/feature/SKILL.md`,
+`.claude/README.md`, `CLAUDE.md`, `README.md`.
+
 ## Состав команды разработки по best practices: security-reviewer возвращён, роль архитектора формализована (2026-09-01)
 
 По разбору «правильный ли у нас состав команды» (нет архитектора, security-инженера,

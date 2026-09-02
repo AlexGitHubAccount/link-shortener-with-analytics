@@ -86,8 +86,8 @@ link-shortener/
 Этот проект — учебный полигон для возможностей Claude Code:
 - **Plan mode** и `CLAUDE.md` (правила проекта)
 - **Skills** (`.claude/skills/push-gate/` — гейт перед push; `.claude/skills/feature/` — плейбук команды разработки)
-- **Subagents** (Explore, Plan, general-purpose, кастомные ревьюеры `code-reviewer`/`security-reviewer` и разработчики `backend-dev`/`frontend-dev`/`test-engineer`)
-- **Agent Teams** (экспериментальные): `/feature <описание>` — ведущий (он же архитектор) принимает архитектурные решения, раскидывает задачи по тиммейтам-разработчикам, координирует, гоняет ревью (`code-reviewer` + `security-reviewer` на auth) и push
+- **Subagents** (Explore, Plan, general-purpose, кастомные ревьюеры `code-reviewer`/`devsecops-reviewer` и разработчики `backend-dev`/`frontend-dev`)
+- **Agent Teams** (экспериментальные): `/feature <описание>` — состав 1 + 2 + 2: ведущий (он же архитектор) + два тиммейта-разработчика (`backend-dev`/`frontend-dev`, каждый пишет свои тесты) + два ревьюера без имени (`code-reviewer` всегда + `devsecops-reviewer` на auth-/инфра-поверхности). Ведущий принимает архитектурные решения, раскидывает задачи, координирует, гоняет ревью и push
 - **MCP-серверы** (PostgreSQL, Context7, Docker, claude-in-chrome, Semgrep, Playwright, GitHub — полный список в таблице «MCP-серверы» файла `CLAUDE.md`)
 - **Hooks**: здесь ничего не пушится вручную — pre-push hook блокирует `git push`, пока `/push-gate` не прогонит один полный проход детерминированных проверок (lint, affected type-check/test/build, скан секретов) зелёным. Гейт **только отчёт** — сам код не правит; находки чинятся вместе с человеком. Полную регрессию гоняет CI, не локальный push. `git commit` — отдельный лёгкий гейт (только lint). См. `.claude/README.md`.
 

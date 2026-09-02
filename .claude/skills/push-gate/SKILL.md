@@ -1,6 +1,6 @@
 ---
 name: push-gate
-description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-проход code-review (и security-review, если диапазон трогает auth-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
+description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-проход code-review (и devsecops-review, если диапазон трогает auth- или инфра-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
 ---
 
 # push-gate
@@ -78,20 +78,26 @@ CI (`.github/workflows/ci.yml`).
 Return findings via this schema: `{ findings: [{ file, line, summary, severity }] }` (severity
 ∈ high|medium|low), max 10, empty array if clean.»
 
-### 2.2 security-reviewer — только если диапазон трогает security-поверхность
+### 2.2 devsecops-reviewer — только если диапазон трогает security- или инфра-поверхность
 
 `git diff ${diffRange} --name-only` — если хоть один файл под одним из путей:
-`apps/api/src/auth/`, `apps/api/src/common/guards/`, `apps/api/src/common/decorators/`,
-`apps/api/src/main.ts`, `apps/api/src/redirect/`, `apps/web/src/features/auth/`,
-`apps/web/src/stores/auth.store.ts`, `apps/web/src/lib/api-client.ts` —
+- **security-проход**: `apps/api/src/auth/`, `apps/api/src/common/guards/`,
+  `apps/api/src/common/decorators/`, `apps/api/src/main.ts`, `apps/api/src/redirect/`,
+  `apps/web/src/features/auth/`, `apps/web/src/stores/auth.store.ts`,
+  `apps/web/src/lib/api-client.ts`
+- **devops-проход**: `.github/workflows/`, `apps/api/Dockerfile`, `apps/web/Dockerfile`,
+  `apps/web/nginx.conf.template`, `docker-compose.yml`, `turbo.json`, `**/.dockerignore`,
+  `pnpm-workspace.yaml`, `pnpm-lock.yaml`, любой `package.json`,
+  `apps/api/src/config/env.validation.ts`
+
 запустить вторым субагентом (тоже без имени):
 
-`Agent({ subagent_type: 'security-reviewer', prompt: ... })`
+`Agent({ subagent_type: 'devsecops-reviewer', prompt: ... })`
 
-Промпт: «Review the security-sensitive surface touched by the not-yet-pushed commits. Range:
-`${diffRange}`. Follow your own scope (the eight areas). Return findings via this schema:
-`{ findings: [{ file, line, summary, severity }] }` (severity ∈ high|medium|low), max 10,
-empty array if clean.»
+Промпт: «Review the not-yet-pushed commits. Range: `${diffRange}`. Do only the pass(es) whose
+zone the diff actually touches (security / devops). Follow your own scope. Return findings via
+this schema: `{ findings: [{ file, line, summary, severity }] }` (severity ∈ high|medium|low),
+max 10, empty array if clean.»
 
 Можно запускать 2.1 и 2.2 параллельно.
 
@@ -107,8 +113,8 @@ empty array if clean.»
 - Таблица `CHECK` из Шага 1 (что PASS, что FAIL).
 - Для каждой FAIL — что именно сломалось (из хвоста лога), где, почему это важно,
   направление фикса. **Подробно** — пользователь по этому отчёту принимает решения.
-- Находки Шага 2 (`code-reviewer` и, если запускался, `security-reviewer`), сгруппированные
-  по severity, с пометкой от какого ревьюера.
+- Находки Шага 2 (`code-reviewer` и, если запускался, `devsecops-reviewer`), сгруппированные
+  по severity, с пометкой от какого ревьюера (и `[security]`/`[devops]` для второго).
 
 ## Шаг 4: решение
 
@@ -130,15 +136,15 @@ empty array if clean.»
   2. Показать полный отчёт Шага 3.
   3. Дальше разбираем и чиним вместе с пользователем в основной сессии (обычными Edit/Bash,
      не автономным агентом). После правок — повторный `/push-gate`.
-  4. Если `security-reviewer` (Шаг 2.2) вернул `high` — **настоятельно** предложить
-     `/code-review ultra` перед повторной попыткой (глубокое облачное ревью auth, платно,
-     инициирует пользователь). Для обычных `high` — просто чиним и перезапускаем.
+  4. Если `devsecops-reviewer` (Шаг 2.2) вернул `[security] high` — **настоятельно**
+     предложить `/code-review ultra` перед повторной попыткой (глубокое облачное ревью auth,
+     платно, инициирует пользователь). Для обычных `high` — просто чиним и перезапускаем.
 
 ## Что этот skill НЕ делает
 
 - Не правит код и не коммитит фиксы (кроме doc-sync коммита на чистом прогоне).
-- Не генерирует недостающие тесты (это работа `test-engineer` в `/feature`, не гейта).
+- Не генерирует недостающие тесты (их пишут `backend-dev`/`frontend-dev` в `/feature`, не гейт).
 - Не крутит цикл «нашли → починили → перепроверили».
-- Не запускает больше двух субагентов (`code-reviewer` всегда + `security-reviewer` по
+- Не запускает больше двух субагентов (`code-reviewer` всегда + `devsecops-reviewer` по
   условию), оба без имени, один проход.
 - Не гоняет полную регрессию/E2E (это CI).
