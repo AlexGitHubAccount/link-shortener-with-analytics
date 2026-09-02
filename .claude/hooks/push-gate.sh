@@ -61,6 +61,13 @@ if echo "$COMMAND" | grep -qE '(^|[;&|]|&&)\s*git push\b'; then
     RANGE="${BASE:-HEAD~1}..HEAD"
   fi
 
+  # No unpushed commits in RANGE → nothing for the gate to review. This is a tag-only push
+  # (`git push origin refs/tags/vX.Y.Z`, `git push --tags`), or a branch already up to date.
+  # Let it through — the gate is about code, not tags.
+  if [ -z "$(git rev-list "$RANGE" 2>/dev/null || true)" ]; then
+    exit 0
+  fi
+
   MARKER=".claude/.push-gate-passed"
   CURRENT_HASH="$(git diff "$RANGE" 2>/dev/null | sha256sum | cut -d' ' -f1)"
 
