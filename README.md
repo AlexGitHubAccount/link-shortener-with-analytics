@@ -86,8 +86,8 @@ link-shortener/
 Этот проект — учебный полигон для возможностей Claude Code:
 - **Plan mode** и `CLAUDE.md` (правила проекта)
 - **Skills** (`.claude/skills/push-gate/` — гейт перед push; `.claude/skills/feature/` — плейбук команды разработки)
-- **Subagents** (Explore, Plan, general-purpose, кастомные `qa-engineer` (ревью + E2E) / `devsecops-engineer` (ревью + инфра) и разработчики `backend-dev`/`frontend-dev`)
-- **Agent Teams** (экспериментальные): `/feature <описание>` — состав 1 + 4 как в современной продуктовой команде, у каждого файла и задачи ровно один владелец: ведущий (архитектор и координатор, кода и инфры не пишет) + `backend-dev`/`frontend-dev` (свой код + свои юнит-тесты) + `qa-engineer` (ревью каждого изменения + сквозной E2E) + `devsecops-engineer` (вся инфра/CI/Docker/env/зависимости/релиз + security/devops-ревью). `qa-engineer` и `devsecops-engineer` — тиммейт и субагент-ревью в одном лице
+- **Subagents** (Explore, Plan, general-purpose, кастомные `oncall-qa` (ревью + E2E) / `oncall-devsecops` (ревью + инфра) и разработчики `core-backend`/`core-frontend`)
+- **Agent Teams** (экспериментальные): `/feature <описание>` — состав 1 + 4 как в современной продуктовой команде, у каждого файла и задачи ровно один владелец: ведущий (архитектор и координатор, кода и инфры не пишет) + `core-backend`/`core-frontend` (свой код + свои юнит-тесты) + `oncall-qa` (ревью каждого изменения + сквозной E2E) + `oncall-devsecops` (вся инфра/CI/Docker/env/зависимости/релиз + security/devops-ревью). `oncall-qa` и `oncall-devsecops` — тиммейт и субагент-ревью в одном лице
 - **MCP-серверы** (PostgreSQL, Context7, Docker, claude-in-chrome, Semgrep, Playwright, GitHub — полный список в таблице «MCP-серверы» файла `CLAUDE.md`)
 - **Hooks**: здесь ничего не пушится вручную — pre-push hook блокирует `git push`, пока `/push-gate` не прогонит один полный проход детерминированных проверок (lint, affected type-check/test/build, скан секретов) зелёным. Гейт **только отчёт** — сам код не правит; находки чинятся вместе с человеком. Полную регрессию гоняет CI, не локальный push. `git commit` — отдельный лёгкий гейт (только lint). См. `.claude/README.md`.
 

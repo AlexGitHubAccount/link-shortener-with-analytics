@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Плейбук ведущего (tech-lead / архитектора) для разработки фичи монолита силами команды на Agent Teams. Лид принимает архитектурные решения и координирует; НЕ пишет код и НЕ правит инфру. Тиммейты — backend-dev/frontend-dev (продакшен-код + свои юнит-тесты), qa-engineer (E2E, если новый флоу), devsecops-engineer (инфра/CI/Docker/env/зависимости/релиз, если задеты). qa-engineer и devsecops-engineer также гоняются без имени в режиме ревью (Шаг 4). Затем /push-gate. Вызывать `/feature <описание фичи>`.
+description: Плейбук ведущего (tech-lead / архитектора) для разработки фичи монолита силами команды на Agent Teams. Лид принимает архитектурные решения и координирует; НЕ пишет код и НЕ правит инфру. Тиммейты — core-backend/core-frontend (продакшен-код + свои юнит-тесты), oncall-qa (E2E, если новый флоу), oncall-devsecops (инфра/CI/Docker/env/зависимости/релиз, если задеты). oncall-qa и oncall-devsecops также гоняются без имени в режиме ревью (Шаг 4). Затем /push-gate. Вызывать `/feature <описание фичи>`.
 ---
 
 # feature — разработка фичи командой
@@ -17,45 +17,50 @@ description: Плейбук ведущего (tech-lead / архитектора
 Как в современной продуктовой команде: каждый файл и каждая задача имеют ровно одного
 владельца, никто не пишет в чужую зону.
 
+**Имя агента = частота работы.** `core-backend` / `core-frontend` — постоянное ядро, спавнятся
+тиммейтами почти на каждой фиче. `oncall-qa` / `oncall-devsecops` — по запросу: тиммейтами
+только когда фича задела их зону (новый флоу / инфра-env-deps), плюс всегда как ревьюеры без
+имени на Шаге 4. Лид (вы) — всегда.
+
 ### Полная карта ответственности
 
 | Зона / задача | Владелец |
 |---|---|
-| `apps/api/src/**` (бизнес-логика: сервисы, контроллеры, DTO, `auth/`, `common/`, guards, decorators) + свои `*.spec.ts` | `backend-dev` |
-| `apps/api/prisma/**` (`schema.prisma`, файлы миграций — авторство) | `backend-dev` |
-| `apps/web/src/**` + свои `*.test.tsx` + `apps/web/vite.config.ts` / `vitest.config.ts` | `frontend-dev` |
-| `packages/shared-types/src/index.ts` (контракт) | `backend-dev` (сериализация: один пишет, остальные ждут) |
-| `apps/e2e/**` (сквозные Playwright-тесты) | `qa-engineer` |
-| Ревью каждого диапазона: корректность, конвенции, адекватность тестов | `qa-engineer` (режим ревью) |
-| `.github/workflows/**`, `apps/*/Dockerfile`, `nginx.conf.template`, `docker-compose.yml`, `turbo.json`, `.dockerignore`, `pnpm-workspace.yaml` | `devsecops-engineer` |
-| `apps/api/src/main.ts` (bootstrap: CORS/helmet/ValidationPipe/Swagger), `apps/api/src/config/**` (Joi env), `.env.example`, `.nvmrc` | `devsecops-engineer` |
-| env-переменные (все места сразу), зависимости (`package.json` deps + lockfile + `allowBuilds` + `pnpm audit`) | `devsecops-engineer` |
-| Механика релиза (тег, GitHub Release, CD), порядок деплоя миграций, откат | `devsecops-engineer` |
-| Security-ревью (auth/redirect/CORS/секреты) + devops-ревью пайплайна | `devsecops-engineer` (режим ревью) |
+| `apps/api/src/**` (бизнес-логика: сервисы, контроллеры, DTO, `auth/`, `common/`, guards, decorators) + свои `*.spec.ts` | `core-backend` |
+| `apps/api/prisma/**` (`schema.prisma`, файлы миграций — авторство) | `core-backend` |
+| `apps/web/src/**` + свои `*.test.tsx` + `apps/web/vite.config.ts` / `vitest.config.ts` | `core-frontend` |
+| `packages/shared-types/src/index.ts` (контракт) | `core-backend` (сериализация: один пишет, остальные ждут) |
+| `apps/e2e/**` (сквозные Playwright-тесты) | `oncall-qa` |
+| Ревью каждого диапазона: корректность, конвенции, адекватность тестов | `oncall-qa` (режим ревью) |
+| `.github/workflows/**`, `apps/*/Dockerfile`, `nginx.conf.template`, `docker-compose.yml`, `turbo.json`, `.dockerignore`, `pnpm-workspace.yaml` | `oncall-devsecops` |
+| `apps/api/src/main.ts` (bootstrap: CORS/helmet/ValidationPipe/Swagger), `apps/api/src/config/**` (Joi env), `.env.example`, `.nvmrc` | `oncall-devsecops` |
+| env-переменные (все места сразу), зависимости (`package.json` deps + lockfile + `allowBuilds` + `pnpm audit`) | `oncall-devsecops` |
+| Механика релиза (тег, GitHub Release, CD), порядок деплоя миграций, откат | `oncall-devsecops` |
+| Security-ревью (auth/redirect/CORS/секреты) + devops-ревью пайплайна | `oncall-devsecops` (режим ревью) |
 | Архитектурные решения (контракт, модель данных, security-постура, семантика ошибок), разбивка, координация, конфликты | **лид** |
 | `CHANGELOG.md` / `CLAUDE.md` / `README.md` / `.claude/**`, запуск ревью и `/push-gate` | **лид** |
-| Решение «когда резать релиз и какая версия» | **лид** (механику делает `devsecops-engineer`) |
+| Решение «когда резать релиз и какая версия» | **лид** (механику делает `oncall-devsecops`) |
 
 ### Тиммейты — спавнятся только те, кого фича задела
 
 | Тиммейт | Когда спавнить | Пишет |
 |---|---|---|
-| `backend-dev` («be») | фича трогает бэкенд | код + Jest-юниты + `schema.prisma`/миграции |
-| `frontend-dev` («fe») | фича трогает фронтенд | код + Vitest-тесты |
-| `qa-engineer` («qa») | фича добавляет новый пользовательский флоу | E2E в `apps/e2e/**` |
-| `devsecops-engineer` («ops») | фича трогает CI/Docker/`turbo.json`/`main.ts`/`config/`/добавляет env-переменную или зависимость | инфра/пайплайн/security-конфиг |
+| `core-backend` («be») | фича трогает бэкенд | код + Jest-юниты + `schema.prisma`/миграции |
+| `core-frontend` («fe») | фича трогает фронтенд | код + Vitest-тесты |
+| `oncall-qa` («qa») | фича добавляет новый пользовательский флоу | E2E в `apps/e2e/**` |
+| `oncall-devsecops` («ops») | фича трогает CI/Docker/`turbo.json`/`main.ts`/`config/`/добавляет env-переменную или зависимость | инфра/пайплайн/security-конфиг |
 
 «You build it, you test it»: `be`/`fe` пишут и держат зелёными свои юнит/компонентные тесты
 (`test:cov`, порог 80%).
 
-**`qa-engineer` и `devsecops-engineer` — две шляпы каждый:** тиммейт (пишет свою зону, Шаг 2)
+**`oncall-qa` и `oncall-devsecops` — две шляпы каждый:** тиммейт (пишет свою зону, Шаг 2)
 и субагент БЕЗ имени в режиме ревью (Шаг 4 + push-gate). Одно определение, режим задаёт
 вызывающий промпт.
 
 **Лид — архитектор и координатор, не пишет код и не правит инфру.** Отдельного агента-архитектора
 нет: архитектурные решения — точки стыковки между тиммейтами, их принимает координатор
 (Шаг 1.2). Если поймали себя на том, что сами редактируете `.github/` или `Dockerfile` —
-это задача `devsecops-engineer`, верните её ему.
+это задача `oncall-devsecops`, верните её ему.
 
 ## Шаг 1: план
 
@@ -65,7 +70,7 @@ description: Плейбук ведущего (tech-lead / архитектора
    форму задаёте вы. Пройтись по чек-листу и зафиксировать ответы в плане:
    - **Контракт**: нужна ли правка `packages/shared-types/src/index.ts`? Какие именно поля,
      их типы, `null` vs optional (Prisma-модель — источник истины по форме). Кто из тиммейтов
-     владеет этой правкой (обычно `backend-dev`), кто ждёт.
+     владеет этой правкой (обычно `core-backend`), кто ждёт.
    - **Модель данных / миграция**: меняется `schema.prisma`? Деструктив? Тогда expand →
      migrate → contract отдельными миграциями. Новый паттерн выборки по `Click` → нужен
      `@@index` (таблица растёт неограниченно).
@@ -74,16 +79,16 @@ description: Плейбук ведущего (tech-lead / архитектора
      (что атакующий мог бы сделать и что это блокирует), продумать контроли (новый приватный
      эндпоинт под `JwtAuthGuard` + фильтр по `@CurrentUser()`; новый публичный — под
      `ThrottlerGuard`). Реализацию security-конфига (`main.ts`, `config/`) и Шаг-4 ревью
-     ведёт `devsecops-engineer` — заведите ему задачу.
+     ведёт `oncall-devsecops` — заведите ему задачу.
    - **Инфра / путь в прод**: фича добавляет env-переменную, зависимость, меняет `turbo.json`
-     / `Dockerfile*` / `.github/workflows/`? Если да — это **задача `devsecops-engineer`**
+     / `Dockerfile*` / `.github/workflows/`? Если да — это **задача `oncall-devsecops`**
      (тиммейт «ops»), не ваша. Новая env-переменная — он проводит её СРАЗУ через Joi-схему
      `config/env.validation.ts` + нужную job в `ci.yml` + `.env.example` (+ Dockerfile, если
      нужна в build/runtime). Шаг 4 автоматически включит его же в режиме ревью.
    - **Семантика ошибок**: какие Nest-исключения бросаем на каких путях, что видит фронтенд.
    - **Влияние на существующее**: какие текущие тесты/эндпоинты/типы поедут от этой правки.
    - **Observability**: фича должна эмитить лог/метрику? Новый запрос по `Click` → `EXPLAIN`
-     + `@@index` (задача `backend-dev`), проверяет `qa-engineer` на ревью.
+     + `@@index` (задача `core-backend`), проверяет `oncall-qa` на ревью.
 
 3. Разбить фичу на задачи так, чтобы **никакие два тиммейта не трогали один файл** (ключевое
    требование Agent Teams — параллельная запись в один файл = потеря изменений). Типичная
@@ -106,14 +111,14 @@ description: Плейбук ведущего (tech-lead / архитектора
 вашу историю):
 ```
 # если фича требует env-переменной / зависимости / правки main.ts|config|инфры:
-Spawn a devsecops-engineer teammate named "ops". Engineer mode. Task: <какие файлы, какая
-env-переменная и во все ли места, какая зависимость>. Runs first.
-Spawn a backend-dev teammate named "be". Task: <что именно, какие файлы, какой контракт>.
+Spawn an oncall-devsecops teammate named "ops". Engineer mode (write). Task: <какие файлы,
+какая env-переменная и во все ли места, какая зависимость>. Runs first.
+Spawn a core-backend teammate named "be". Task: <что именно, какие файлы, какой контракт>.
 Include the Jest unit specs. Depends on "ops" if a new env var is needed.
-Spawn a frontend-dev teammate named "fe". Task: <...>. Depends on "be" finishing the DTO.
+Spawn a core-frontend teammate named "fe". Task: <...>. Depends on "be" finishing the DTO.
 Include the Vitest tests.
 # только если фича добавляет новый пользовательский флоу:
-Spawn a qa-engineer teammate named "qa". Engineer mode. Task: write the E2E flow test in
+Spawn an oncall-qa teammate named "qa". Teammate mode — write the E2E flow test in
 apps/e2e/**. Depends on "be" and "fe".
 ```
 Не начинать реализацию за тиммейтов — если поймали себя на этом (в т.ч. на правке инфры),
@@ -132,9 +137,9 @@ apps/e2e/**. Depends on "be" and "fe".
 Когда ВСЕ задачи закрыты (тиммейты `qa`/`ops`, если были, завершились) — запустить ревьюеров
 как **субагенты без имени** (чтобы не плодить тиммейтов) на диапазоне новых коммитов:
 
-- **`qa-engineer`** (режим ревью) — всегда. Корректность + явная безопасность + конвенции +
+- **`oncall-qa`** (режим ревью) — всегда. Корректность + явная безопасность + конвенции +
   адекватность тестов. Промпт начинать с «Review mode.».
-- **`devsecops-engineer`** (режим ревью) — если фича тронула хоть один путь:
+- **`oncall-devsecops`** (режим ревью) — если фича тронула хоть один путь:
   - security-проход: `apps/api/src/auth/`, `apps/api/src/common/guards|decorators/`,
     `apps/api/src/main.ts`, `apps/api/src/redirect/`, `apps/web/src/features/auth/`,
     `apps/web/src/stores/auth.store.ts`, `apps/web/src/lib/api-client.ts`
@@ -153,13 +158,13 @@ apps/e2e/**. Depends on "be" and "fe".
 Для особо чувствительного диапазона (auth, JWT, OAuth-флоу, CORS, публичный redirect,
 платёжка) — **настоятельно** предложить пользователю эскалацию `/code-review high` или
 `/code-review ultra` (глубокое облачное ревью, платно, запускает пользователь). Этот skill
-его не запускает сам, но при `[security] high` от `devsecops-engineer` — рекомендовать прямо.
+его не запускает сам, но при `[security] high` от `oncall-devsecops` — рекомендовать прямо.
 
 ## Шаг 5: правки
 
 Разобрать находки вместе с пользователем. Мелкие однозначные — поручить владельцу зоны
-(соответствующему тиммейту, если ещё жив; инфра/security-конфиг — `devsecops-engineer`;
-E2E — `qa-engineer`) или, если тиммейт уже завершился, заспавнить его снова под конкретную
+(соответствующему тиммейту, если ещё жив; инфра/security-конфиг — `oncall-devsecops`;
+E2E — `oncall-qa`) или, если тиммейт уже завершился, заспавнить его снова под конкретную
 правку. Спорные — решает пользователь.
 
 ## Шаг 6: ship
