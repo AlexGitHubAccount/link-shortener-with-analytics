@@ -1,6 +1,6 @@
 ---
 name: push-gate
-description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-проход code-review (и devsecops-review, если диапазон трогает auth- или инфра-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
+description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-ревью `qa-engineer` (и devsecops-review, если диапазон трогает auth- или инфра-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
 ---
 
 # push-gate
@@ -70,13 +70,14 @@ CI (`.github/workflows/ci.yml`).
 **Все субагенты здесь — без `name`** (при включённых Agent Teams именованный субагент стал бы
 тиммейтом; здесь это не нужно). Максимум два: один всегда, второй — по условию.
 
-### 2.1 code-reviewer — всегда
+### 2.1 qa-engineer (режим ревью) — всегда
 
-`Agent({ subagent_type: 'code-reviewer', prompt: ... })`
+`Agent({ subagent_type: 'qa-engineer', prompt: ... })`
 
-Промпт: «Review the not-yet-pushed commits. Range: `${diffRange}`. Follow your own scope.
-Return findings via this schema: `{ findings: [{ file, line, summary, severity }] }` (severity
-∈ high|medium|low), max 10, empty array if clean.»
+Промпт: «Review mode. Review the not-yet-pushed commits. Range: `${diffRange}`. Follow your
+own review scope (correctness, conventions, explicit security, test adequacy). Return findings
+via this schema: `{ findings: [{ file, line, summary, severity }] }` (severity ∈
+high|medium|low), max 10, empty array if clean.»
 
 ### 2.2 devsecops-reviewer — только если диапазон трогает security- или инфра-поверхность
 
@@ -113,7 +114,7 @@ max 10, empty array if clean.»
 - Таблица `CHECK` из Шага 1 (что PASS, что FAIL).
 - Для каждой FAIL — что именно сломалось (из хвоста лога), где, почему это важно,
   направление фикса. **Подробно** — пользователь по этому отчёту принимает решения.
-- Находки Шага 2 (`code-reviewer` и, если запускался, `devsecops-reviewer`), сгруппированные
+- Находки Шага 2 (`qa-engineer` и, если запускался, `devsecops-reviewer`), сгруппированные
   по severity, с пометкой от какого ревьюера (и `[security]`/`[devops]` для второго).
 
 ## Шаг 4: решение
@@ -143,8 +144,9 @@ max 10, empty array if clean.»
 ## Что этот skill НЕ делает
 
 - Не правит код и не коммитит фиксы (кроме doc-sync коммита на чистом прогоне).
-- Не генерирует недостающие тесты (это работа `test-engineer` в `/feature`, не гейта).
+- Не генерирует недостающие тесты (юниты пишут `backend-dev`/`frontend-dev`, E2E — `qa-engineer`
+  в `/feature`, не гейт).
 - Не крутит цикл «нашли → починили → перепроверили».
-- Не запускает больше двух субагентов (`code-reviewer` всегда + `devsecops-reviewer` по
-  условию), оба без имени, один проход.
+- Не запускает больше двух субагентов (`qa-engineer` в режиме ревью всегда + `devsecops-reviewer`
+  по условию), оба без имени, один проход.
 - Не гоняет полную регрессию/E2E (это CI).
