@@ -1,6 +1,6 @@
 ---
 name: push-gate
-description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-ревью `qa-engineer` (и devsecops-review, если диапазон трогает auth- или инфра-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
+description: Гейт перед push — один полный проход детерминированных проверок качества по коммитам, которых ещё нет на remote (lint, affected type-check/test/build, скан секретов) + advisory-ревью `qa-engineer` (и `devsecops-engineer` в режиме ревью, если диапазон трогает auth- или инфра-поверхность). Проверки идут до конца, собирают ВСЁ и отдаются человеку с объяснением; гейт сам код НЕ правит и НЕ коммитит. Push блокируется, пока все детерминированные проверки не зелёные и нет находок severity:high от ревьюеров. Полная регрессия (весь тест-сьют, E2E) — работа CI, сюда не входит. Срабатывает сам, когда pre-push hook (.claude/hooks/push-gate.sh) отклоняет `git push`. Можно вызвать вручную (`/push-gate`).
 ---
 
 # push-gate
@@ -79,7 +79,7 @@ own review scope (correctness, conventions, explicit security, test adequacy). R
 via this schema: `{ findings: [{ file, line, summary, severity }] }` (severity ∈
 high|medium|low), max 10, empty array if clean.»
 
-### 2.2 devsecops-reviewer — только если диапазон трогает security- или инфра-поверхность
+### 2.2 devsecops-engineer (режим ревью) — только если диапазон трогает security- или инфра-поверхность
 
 `git diff ${diffRange} --name-only` — если хоть один файл под одним из путей:
 - **security-проход**: `apps/api/src/auth/`, `apps/api/src/common/guards/`,
@@ -93,12 +93,12 @@ high|medium|low), max 10, empty array if clean.»
 
 запустить вторым субагентом (тоже без имени):
 
-`Agent({ subagent_type: 'devsecops-reviewer', prompt: ... })`
+`Agent({ subagent_type: 'devsecops-engineer', prompt: ... })`
 
-Промпт: «Review the not-yet-pushed commits. Range: `${diffRange}`. Do only the pass(es) whose
-zone the diff actually touches (security / devops). Follow your own scope. Return findings via
-this schema: `{ findings: [{ file, line, summary, severity }] }` (severity ∈ high|medium|low),
-max 10, empty array if clean.»
+Промпт: «Review mode. Review the not-yet-pushed commits. Range: `${diffRange}`. Do only the
+pass(es) whose zone the diff actually touches (security / devops). Follow your own review
+scope. Return findings via this schema: `{ findings: [{ file, line, summary, severity }] }`
+(severity ∈ high|medium|low), max 10, empty array if clean.»
 
 Можно запускать 2.1 и 2.2 параллельно.
 
@@ -114,7 +114,7 @@ max 10, empty array if clean.»
 - Таблица `CHECK` из Шага 1 (что PASS, что FAIL).
 - Для каждой FAIL — что именно сломалось (из хвоста лога), где, почему это важно,
   направление фикса. **Подробно** — пользователь по этому отчёту принимает решения.
-- Находки Шага 2 (`qa-engineer` и, если запускался, `devsecops-reviewer`), сгруппированные
+- Находки Шага 2 (`qa-engineer` и, если запускался, `devsecops-engineer`), сгруппированные
   по severity, с пометкой от какого ревьюера (и `[security]`/`[devops]` для второго).
 
 ## Шаг 4: решение
@@ -137,7 +137,7 @@ max 10, empty array if clean.»
   2. Показать полный отчёт Шага 3.
   3. Дальше разбираем и чиним вместе с пользователем в основной сессии (обычными Edit/Bash,
      не автономным агентом). После правок — повторный `/push-gate`.
-  4. Если `devsecops-reviewer` (Шаг 2.2) вернул `[security] high` — **настоятельно**
+  4. Если `devsecops-engineer` (Шаг 2.2) вернул `[security] high` — **настоятельно**
      предложить `/code-review ultra` перед повторной попыткой (глубокое облачное ревью auth,
      платно, инициирует пользователь). Для обычных `high` — просто чиним и перезапускаем.
 
@@ -147,6 +147,6 @@ max 10, empty array if clean.»
 - Не генерирует недостающие тесты (юниты пишут `backend-dev`/`frontend-dev`, E2E — `qa-engineer`
   в `/feature`, не гейт).
 - Не крутит цикл «нашли → починили → перепроверили».
-- Не запускает больше двух субагентов (`qa-engineer` в режиме ревью всегда + `devsecops-reviewer`
-  по условию), оба без имени, один проход.
+- Не запускает больше двух субагентов (`qa-engineer` в режиме ревью всегда + `devsecops-engineer`
+  в режиме ревью по условию), оба без имени, один проход.
 - Не гоняет полную регрессию/E2E (это CI).

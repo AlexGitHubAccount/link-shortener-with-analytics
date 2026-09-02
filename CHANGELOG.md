@@ -15,6 +15,42 @@
 `## [x.y.z]` появляется отдельно, в момент релиза, как якорь версии (semver: MAJOR —
 ломающее, MINOR — фича, PATCH — багфикс) с git-тегом `vX.Y.Z` и GitHub Release.
 
+## `devsecops-reviewer` вырос в `devsecops-engineer`: инфра забрана у лида, у каждой задачи один владелец (2026-09-02)
+
+Строгая оценка команды выявила главный разрыв с настоящей продакшен-организацией: «путь
+кода в прод» (CI, Docker, `turbo.json`, env-переменные, зависимости, релиз, деплой миграций)
+был «на лиде на стороне» — тот самый анти-паттерн, когда координатор начинает реализовывать.
+Закрыто:
+
+- **`devsecops-reviewer` → `devsecops-engineer`**, две шляпы как у `qa-engineer`:
+  - *тиммейт «ops»* — **владеет и ПИШЕТ**: `.github/workflows/**`, `apps/*/Dockerfile`,
+    `nginx.conf.template`, `docker-compose.yml`, `turbo.json`, `pnpm-workspace.yaml`, все
+    `.dockerignore`, `apps/api/src/main.ts` (bootstrap CORS/helmet/ValidationPipe/Swagger),
+    `apps/api/src/config/**` (Joi env), `.env.example`, `.nvmrc`; проводит новую
+    env-переменную сразу через все места; ставит зависимости (владеет `package.json` deps +
+    `pnpm-lock.yaml` + `allowBuilds` + `pnpm audit`); механика релиза (тег, GitHub Release,
+    CD) и порядок деплоя миграций.
+  - *субагент без имени (режим ревью)* — прежние два прохода (security 8 областей + Semgrep,
+    devops-пайплайн), делает только задетый.
+- **У лида забрали инфру.** Лид теперь — чистый архитектор + координатор: решения,
+  разбивка, стыковка, документация (`CHANGELOG`/`CLAUDE.md`/`README`/`.claude/**`), запуск
+  гейта. Кода и инфры не пишет. `feature/SKILL.md` прямо говорит: поймали себя на правке
+  `.github/` или `Dockerfile` — верните задачу `ops`.
+- **`backend-dev` сузился** — `main.ts` и `config/**` больше не его; новая env-переменная и
+  новая зависимость — запрос к `devsecops-engineer`, не своя правка. `JWT_SECRET`
+  (`auth/jwt-secret.ts`) остаётся за `backend-dev`.
+- **Полная карта ответственности** добавлена в `feature/SKILL.md` — таблица «зона/задача →
+  владелец», в которой каждый файл и каждый вид работы закреплён ровно за одним. Плюс пункт
+  «Observability» в чек-лист Шага 1.2 (лог/метрика? `EXPLAIN` + `@@index` на новом запросе
+  по `Click`).
+- Состав теперь описывается как **1 + 4** (лид + be + fe + qa + ops), где qa и ops
+  спавнятся тиммейтами только если фича задела их зону.
+
+Затронуты: `agents/devsecops-engineer.md` (заменил `devsecops-reviewer.md`),
+`agents/backend-dev.md` / `frontend-dev.md` / `qa-engineer.md`, `skills/feature/SKILL.md`
+(карта ответственности, Шаги 1.2/2/3/4/5), `skills/push-gate/SKILL.md`, `.claude/README.md`,
+`CLAUDE.md`, `README.md`.
+
 ## Команда приведена к форме современной продуктовой: `code-reviewer` + `test-engineer` → один `qa-engineer` (2026-09-02)
 
 Итог серии итераций по составу (три записи ниже — промежуточные состояния одного дня).
