@@ -102,7 +102,7 @@ link-shortener/
 
 ## Аутентификация и база данных
 
-- **Аутентификация**: Google OAuth + JWT (`apps/api/src/auth/`) — каждый приватный эндпоинт скоупится по авторизованному пользователю, сервер может отозвать токен (`POST /auth/logout`). Реальные креды Google Cloud должен предоставить тот, кто разворачивает проект локально (Claude Code не может их создать) — шаги настройки Google OAuth — в разделе Troubleshooting файла `CLAUDE.md`.
+- **Аутентификация**: Google OAuth **и email/password** (`POST /auth/register` / `/auth/login`, argon2id-хеш, rate-limited) + JWT (`apps/api/src/auth/`) — каждый приватный эндпоинт скоупится по авторизованному пользователю, сервер может отозвать токен (`POST /auth/logout`). Один аккаунт может связать оба способа входа. Стартовая страница `/login` даёт выбор: «Sign in» для вернувшихся, «Create account» для новых, плюс Google. Реальные креды Google Cloud должен предоставить тот, кто разворачивает проект (Claude Code не может их создать) — шаги настройки Google OAuth в разделе Troubleshooting файла `CLAUDE.md`; email/password работает без внешней настройки.
 
 ## Продакшен-сборка
 

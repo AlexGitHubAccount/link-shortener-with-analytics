@@ -4,9 +4,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Link, Prisma } from '@prisma/client';
+import { Link } from '@prisma/client';
 import { customAlphabet } from 'nanoid';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueConstraintViolation } from '../common/prisma-errors';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
 
@@ -173,12 +174,4 @@ export class LinksService {
     }
     return this.findOne(userId, id);
   }
-}
-
-function isUniqueConstraintViolation(error: unknown, target: string): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002' &&
-    (error.meta?.target as string[] | undefined)?.includes(target) === true
-  );
 }

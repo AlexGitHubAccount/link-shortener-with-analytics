@@ -12,6 +12,15 @@ overrides:
   # real `pnpm audit` run wired into CI. Low real-world reachability here (build-tool-only, no
   # untrusted input reaches it), but the patched version is a trivial, safe bump.
   deepmerge-ts: '>=8.0.0'
+  # fast-uri <3.1.6 - SSRF / host-confusion via percent-encoded scheme normalization and
+  # skipped IDN processing (GHSA-jqff-g426-hqxp + related advisories, published after v1.0.1's
+  # green CI run). Dev-only: pulled in via @nestjs/cli -> @angular-devkit/* -> ajv -> fast-uri,
+  # never in the app's runtime dependency tree. Held to the 3.x line (`<4`): the patch landed
+  # in 3.1.7, and ajv itself declares `fast-uri: ^3.0.1`, so a 4.x/5.x major would enter
+  # silently on the next lockfile refresh and could break ajv / @nestjs/cli. Trivial, safe bump
+  # within the range ajv already expects; without it `pnpm audit --audit-level=high` in CI
+  # fails on 4 highs regardless of any feature work.
+  fast-uri: '>=3.1.6 <4'
 # Build-script approval — pnpm 11 refuses to run postinstall scripts for these deps unless
 # explicitly allowlisted here (a supply-chain safety default: `pnpm install` prints only a
 # warning locally, but `pnpm install --frozen-lockfile` in CI treats it as a hard error, exit

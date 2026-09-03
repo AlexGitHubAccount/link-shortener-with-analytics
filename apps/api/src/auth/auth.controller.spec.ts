@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import type { User } from '@prisma/client';
 import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GoogleProfile } from './strategies/google.strategy';
@@ -21,11 +23,13 @@ describe('AuthController', () => {
   let prismaService: {
     revokedToken: { upsert: jest.Mock; deleteMany: jest.Mock };
   };
+  let authService: { register: jest.Mock; login: jest.Mock };
 
   const baseUser: User = {
     id: 'user-1',
     googleId: 'google-1',
     email: 'user@example.com',
+    passwordHash: null,
     displayName: 'Jane Doe',
     avatarUrl: 'https://example.com/avatar.png',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -45,6 +49,7 @@ describe('AuthController', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
     };
+    authService = { register: jest.fn(), login: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -53,10 +58,52 @@ describe('AuthController', () => {
         { provide: UsersService, useValue: usersService },
         { provide: ConfigService, useValue: configService },
         { provide: PrismaService, useValue: prismaService },
+        { provide: AuthService, useValue: authService },
       ],
-    }).compile();
+    })
+      // ThrottlerGuard (on /register and /login) needs ThrottlerModule's storage/options wired
+      // up - irrelevant to what this suite tests (delegation to AuthService).
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
+  });
+
+  describe('register', () => {
+    it('delegates to AuthService.register and returns the token response', async () => {
+      authService.register.mockResolvedValue({ token: 'new.jwt' });
+
+      const result = await controller.register({
+        email: 'new@example.com',
+        password: 'a-good-password',
+        displayName: 'New User',
+      });
+
+      expect(authService.register).toHaveBeenCalledWith({
+        email: 'new@example.com',
+        password: 'a-good-password',
+        displayName: 'New User',
+      });
+      expect(result).toEqual({ token: 'new.jwt' });
+    });
+  });
+
+  describe('login', () => {
+    it('delegates to AuthService.login and returns the token response', async () => {
+      authService.login.mockResolvedValue({ token: 'session.jwt' });
+
+      const result = await controller.login({
+        email: 'user@example.com',
+        password: 'secret',
+      });
+
+      expect(authService.login).toHaveBeenCalledWith({
+        email: 'user@example.com',
+        password: 'secret',
+      });
+      expect(result).toEqual({ token: 'session.jwt' });
+    });
   });
 
   describe('me', () => {
@@ -150,6 +197,37 @@ describe('AuthController', () => {
       expect(res.redirect).toHaveBeenCalledWith(
         'http://localhost:5173/auth/callback#token=another.token',
       );
+    });
+
+    it('redirects to /login?error=account_exists when a password account already owns the email', async () => {
+      usersService.findOrCreateByGoogleProfile.mockRejectedValue(
+        new ConflictException('An account with this email already exists.'),
+      );
+      configService.get.mockReturnValue('http://localhost:5173');
+
+      const req = buildReq();
+      const res = buildRes();
+
+      await controller.googleAuthCallback(req, res as unknown as Response);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:5173/login?error=account_exists',
+      );
+    });
+
+    it('rethrows a non-Conflict error from findOrCreateByGoogleProfile', async () => {
+      usersService.findOrCreateByGoogleProfile.mockRejectedValue(
+        new Error('db down'),
+      );
+      configService.get.mockReturnValue('http://localhost:5173');
+
+      await expect(
+        controller.googleAuthCallback(
+          buildReq(),
+          buildRes() as unknown as Response,
+        ),
+      ).rejects.toThrow('db down');
     });
   });
 

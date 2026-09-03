@@ -79,6 +79,57 @@ export const createLinkRequestSchema = z.object({
 
 export type CreateLinkRequest = z.infer<typeof createLinkRequestSchema>;
 
+// Single source of truth for email+password auth validation, shared by the frontend forms and
+// mirrored by apps/api/src/auth/dto/{register,login}.dto.ts's class-validator rules. These two
+// endpoints (POST /auth/register, POST /auth/login) are public and issue the same JWT the
+// Google OAuth flow does.
+//
+// Password policy (min 8 / max 128) is applied ONLY at registration. Login validates presence
+// only (min 1) - never reject an existing user's stored password for failing a policy that may
+// have changed, and never leak the policy as a login-time signal.
+//
+// Email is trimmed + lowercased to a canonical form before the format check (piped, so the
+// check sees the normalised value) - the API's DTOs do the same and UsersService normalises
+// once more at the data layer. Case/whitespace variants of one address must resolve to one
+// account.
+const canonicalEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ error: 'Enter a valid email address' }));
+
+export const registerRequestSchema = z.object({
+  email: canonicalEmail,
+  password: z
+    .string()
+    .min(8, 'At least 8 characters')
+    .max(128, 'At most 128 characters'),
+  // Optional display name; an empty string from an untouched form field is treated as "not
+  // provided", matching the backend ValidationPipe's handling of "" as absent.
+  displayName: z
+    .string()
+    .min(1, 'At least 1 character')
+    .max(80, 'At most 80 characters')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+});
+
+export type RegisterRequest = z.infer<typeof registerRequestSchema>;
+
+export const loginRequestSchema = z.object({
+  email: canonicalEmail,
+  password: z.string().min(1, 'Enter your password').max(128),
+});
+
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+
+// JSON body returned by both POST /auth/register and POST /auth/login. The Google OAuth flow
+// hands the same token to the SPA via a URL fragment instead - these endpoints return it in the
+// response body because the client drives the request directly.
+export interface AuthTokenResponse {
+  token: string;
+}
+
 // Will be implemented in Stage 5 (Analytics)
 export interface LinkAnalytics {
   linkId: string;

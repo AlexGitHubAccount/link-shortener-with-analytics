@@ -1,4 +1,6 @@
 import {
+  Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -13,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -20,11 +23,15 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import type { AuthUser } from '@link-shortener/shared-types';
+import type { User } from '@prisma/client';
+import type { AuthTokenResponse, AuthUser } from '@link-shortener/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthService } from './auth.service';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import type { GoogleProfile } from './strategies/google.strategy';
 import type { JwtPayload, RequestUser } from './strategies/jwt.strategy';
 
@@ -38,7 +45,47 @@ export class AuthController {
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
   ) {}
+
+  // Email+password registration - a public alternative to Google OAuth that issues the exact
+  // same JWT. Throttled tightly (per-IP, ThrottlerModule's shared storage): account creation is
+  // an abuse surface (mass/spam signups), same rationale as LinksController.create. Opts into
+  // ThrottlerGuard per-route - it is NOT a global guard, so authenticated traffic stays
+  // unthrottled.
+  @ApiOperation({
+    summary:
+      'Register with email + password - issues a JWT (same token as Google login)',
+  })
+  @ApiResponse({ status: 201, description: 'Account created, JWT returned' })
+  @ApiResponse({ status: 409, description: 'Email already registered' })
+  @ApiResponse({ status: 429, description: 'Too many registration attempts' })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseGuards(ThrottlerGuard)
+  @Post('register')
+  @HttpCode(201)
+  register(@Body() dto: RegisterDto): Promise<AuthTokenResponse> {
+    return this.authService.register(dto);
+  }
+
+  // Email+password login. Stricter throttle than register - this is the brute-force surface.
+  // Errors are deliberately generic ("Invalid email or password" for wrong password AND for
+  // Google-only / nonexistent accounts) so the response never confirms whether an email is
+  // registered; AuthService also equalises timing on those paths.
+  @ApiOperation({
+    summary:
+      'Log in with email + password - issues a JWT (same token as Google login)',
+  })
+  @ApiResponse({ status: 200, description: 'Credentials valid, JWT returned' })
+  @ApiResponse({ status: 401, description: 'Invalid email or password' })
+  @ApiResponse({ status: 429, description: 'Too many login attempts' })
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @UseGuards(ThrottlerGuard)
+  @Post('login')
+  @HttpCode(200)
+  login(@Body() dto: LoginDto): Promise<AuthTokenResponse> {
+    return this.authService.login(dto);
+  }
 
   // Revokes the CURRENT token server-side (inserts its jti into RevokedToken - see
   // JwtStrategy.validate, which checks this on every subsequent authenticated request). Without
@@ -132,7 +179,23 @@ export class AuthController {
     @Req() req: Request & { user: GoogleProfile },
     @Res() res: Response,
   ): Promise<void> {
-    const user = await this.usersService.findOrCreateByGoogleProfile(req.user);
+    const frontendUrl =
+      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+
+    let user: User;
+    try {
+      user = await this.usersService.findOrCreateByGoogleProfile(req.user);
+    } catch (error) {
+      // A password account already owns this email and we deliberately don't auto-link
+      // (see UsersService.findOrCreateByGoogleProfile). Redirect back to the login page with a
+      // flag the SPA renders a message for, rather than letting Nest render a raw error page.
+      if (error instanceof ConflictException) {
+        res.redirect(`${frontendUrl}/login?error=account_exists`);
+        return;
+      }
+      throw error;
+    }
+
     // jti (JWT ID) - unique per issued token, unrelated to the user id. This is what a later
     // POST /auth/logout revokes; without it, revocation would have no per-token handle to act on.
     const payload: JwtPayload = {
@@ -142,8 +205,6 @@ export class AuthController {
     };
     const token = this.jwtService.sign(payload);
 
-    const frontendUrl =
-      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
     // Token in the URL fragment, not a query string: fragments are never sent to the server
     // in subsequent requests or included in Referer headers, unlike query params - a
     // meaningfully safer place to hand a bearer token to a single-page app for one-time pickup.

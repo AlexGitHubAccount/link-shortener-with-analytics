@@ -15,6 +15,134 @@
 `## [x.y.z]` появляется отдельно, в момент релиза, как якорь версии (semver: MAJOR —
 ломающее, MINOR — фича, PATCH — багфикс) с git-тегом `vX.Y.Z` и GitHub Release.
 
+## Email/password аутентификация рядом с Google OAuth (2026-09-03)
+
+Первая фича, разработанная новой командой Agent Teams (`/feature`) — состав 1 + 4
+(лид + `core-backend` + `core-frontend` + `oncall-qa` + `oncall-devsecops`), отработала
+как задумано: `ops` первым (зависимость) → `be` (контракт разблокировал `fe`) → `fe` →
+`qa` (E2E). Ни одного конфликта параллельной записи.
+
+**Что добавлено.** На `/login` теперь три способа входа: «Sign in» (вернувшиеся),
+«Create account» (новые), Google (как раньше). Два новых публичных эндпоинта
+`POST /auth/register` (201) и `POST /auth/login` (200), оба возвращают `{ token }` тем же
+JWT-payload'ом, что Google-callback.
+
+**Модель данных** (`add_password_auth`, expand-only, недеструктивная): `User.googleId`
+стал nullable, добавлен `User.passwordHash`. Инвариант «хотя бы одно не null» — в
+сервис-слое (Prisma CHECK его не выражает). `findOrCreateByGoogleProfile` больше не
+`upsert`: ищет строго по `googleId` (никогда по email) → нашёл: обновляет только
+`displayName`/`avatarUrl` → не нашёл: `create`. На `P2002` при `create` код НЕ доверяет
+`error.meta.target` (его форма варьируется между версиями Prisma — колонка `["email"]` vs
+constraint `["User_email_key"]`; на нашей Prisma 6.19.3 — колонка, проверено на живой БД):
+перечитывает по `googleId` → нашёл ⇒ гонка Google-входов, вернуть → не нашёл ⇒ email занят
+password-аккаунтом ⇒ `ConflictException` → редирект `/login?error=account_exists`. Email
+везде нормализуется (`trim().toLowerCase()`): `normalizeEmail` в `UsersService` (чокпоинт
+всех путей — Google-email не проходит через DTO), `@Transform` в DTO, `.trim().toLowerCase().pipe(z.email())`
+в zod. Миграция `normalize_existing_emails` (с guard-блоком против коллизий после
+нормализации) привела существующие строки.
+
+**Связывание Google + password на один аккаунт — НАМЕРЕННО не поддерживается** (отложенная
+фича). Первая версия этой ветки авто-связывала по совпадению email — **ревью поймало
+account pre-hijacking** (см. ниже, раздел «Ревью»). Настоящее связывание требует
+email-верификации ИЛИ повторного ввода пароля при линковке; ни того, ни другого в проекте
+нет.
+
+**Security-решения (лид, Шаг 1.2).** Threat-модель: (a) брутфорс пароля через `/auth/login`
+→ жёсткий `@Throttle` 5/60с + медленный argon2id; (b) энумерация email по разнице
+ответа/тайминга → единый generic `401 "Invalid email or password"` для всех трёх случаев
+(неверный пароль / нет такого email / Google-only аккаунт) + `verify` против
+предвычисленного dummy-хеша на «пустых» путях; (c) кража JWT → уже покрыто отзывом по `jti`.
+Регистрация раскрывает занятость email (`409`) — принятый компромисс (email и так уникален
+и полу-публичен в Google-флоу, email-отправки для «тихого» флоу в проекте нет). Хеш —
+`@node-rs/argon2` (argon2id, дефолты OWASP): prebuilt-бинарники, без node-gyp/python —
+не ломает `--frozen-lockfile` на чистом CI и multi-stage Docker-сборку. Новых
+env-переменных не потребовалось. Гонка при регистрации (два одновременных сабмита проходят
+pre-check) ловится по `P2002` в `createPasswordUser` → тот же `409`, не `500`.
+
+**Известные ограничения rate limiting** (унаследованы от `ThrottlerModule`): счётчики
+in-memory per-process (>1 копия API → лимит N×настроенный, нужен Redis-стор); ключ per-IP,
+не per-account (распределённый брутфорс с многих IP не режется); per-account lockout нет.
+Одиночный источник закрыт (`@Throttle` + argon2id ~40мс); распределённая атака — принятый
+gap до реального деплоя. Задокументировано в `CLAUDE.md`.
+
+**Фронтенд.** Общий хелпер `features/auth/completeLogin.ts` (token → `/auth/me` → стор →
+`navigate('/')`) — `AuthCallback.tsx` переведён на него же, теперь все три пути входа на
+одной реализации (раньше Google-callback имел свою инлайн-копию). Формы — `react-hook-form`
++ zod с общими схемами из `shared-types` (`registerRequestSchema`/`loginRequestSchema`).
+Переключатель флоу — `useState` + существующие `Button`, без нового shadcn-компонента.
+`?error=account_exists` в URL (редирект от Google-callback) → алерт «войдите паролем»
+показывается на вкладке `login`; переключение на «Create account» снимает его насовсем,
+переключатель не блокируется; параметр вычищается из URL. `clearErrors('root')` первой
+строкой сабмита обеих форм — устаревший form-level баннер от прошлой попытки не висит рядом
+с новой ошибкой.
+
+**Ревью — два уровня, всё до push.**
+
+*Уровень 1 (Шаг 4, `oncall-qa` + `oncall-devsecops`, субагенты без имени).* Ни одной `high`,
+но обе сессии **независимо** указали на одно: авто-связывание по email в
+`findOrCreateByGoogleProfile` — **account pre-hijacking**. Атака: злоумышленник регистрирует
+`victim@email` с известным ему паролем ДО первого входа жертвы; жертва впервые входит через
+Google этим адресом → её `googleId` привязывается к строке злоумышленника, `passwordHash`
+остаётся рабочим → злоумышленник сохраняет доступ. Оценка `medium` у обоих, но по сути
+персистентный захват аккаунта — починено по **Варианту 1**: авто-связывание убрано целиком.
+Прочее (low, разобрано): `register()` P2002-гонка → `409` не `500`; `RegisterDto.displayName`
+`@Transform` (`''`→`undefined`); enumeration через register-`409` и email в логах при failed
+login — записаны как принятые (первое — решение Шага 1.2, второе — стандартная
+SIEM-практика, пароль не логируется).
+
+*Уровень 2 (`/code-review high`, запустил пользователь — глубокое ревью по auth-диапазону).*
+Нашло 2 важных, которые уровень 1 пропустил: **(1) email нигде не нормализовался** —
+`John@X` при регистрации ≠ `john@x` при входе (регистрозависимое сравнение Postgres) →
+блокировка в своём аккаунте, и коллизия password-строки с Google-входом проскакивала бы
+мимо unique-индекса, частично обнуляя фикс pre-hijacking; **(2) хрупкое доверие
+`error.meta.target`** — если Prisma вернёт имя constraint'а вместо имени колонки,
+`ConflictException` не сработает → 500 вместо редиректа `/login?error=account_exists`, и
+анти-pre-hijacking-путь молча не срабатывает. Обе починены (нормализация в чокпоинте
+`UsersService` + DTO + zod + backfill-миграция; отказ от `meta.target` в пользу re-read по
+`googleId`). Плюс low: dummy-хеш стал ленивым (`dummyHashPromise ??= hash(...)`) — сбой
+argon2 при старте больше не кладёт весь API; form-level `root`-ошибка чистится в начале
+сабмита; алерт `account_exists` больше не висит над формой регистрации. Хелпер P2002
+вынесен в `common/prisma-errors.ts` (раньше был дубль в `links.service.ts`).
+
+*Уровень 3 (`/push-gate`, финальный advisory-проход `oncall-qa` + `oncall-devsecops`).* Одна
+`medium` + три `low`, ни одной `high`. `medium`: `await getDummyHash()` был **вне**
+`.catch(() => false)` → сбой `hash()` дал бы 500 на ветке неизвестного-email при 401 на
+ветке реального пароля — асимметрия кодов = тот самый enumeration-оракул, плюс закешированный
+упавший промис заблокировал бы все последующие входы. Починено: вся argon2-цепочка
+неизвестного-email пути под одним catch (зеркально ветке пароля), мемо сбрасывается при
+reject. `low` (разобраны): googleId-ветка `findOrCreateByGoogleProfile` теперь обновляет и
+`email` (смена на стороне Google + самолечение не-каноничной строки; коллизия → тот же
+`ConflictException`); `fast-uri` override сужен до `>=3.1.6 <4` (фикс уязвимости — в `3.1.7`,
+`ajv` требует `^3`, мажор 4.x был бы для него semver-нарушением; резолвится в `3.1.7` вместо
+`4.1.3`). `low` без правок: backfill-`UPDATE` берёт row-локи на время транзакции — заметка
+про большие таблицы, у проекта нет прода и все строки от Google.
+
+**По ходу — предсуществующая поломка CI, не связанная с фичей.** `ops` при `pnpm audit`
+обнаружил 4 high advisory на `fast-uri < 3.1.6` (SSRF/host-confusion), транзитивно через
+`@nestjs/cli` (devDependency) → `@angular-devkit` → `ajv`. Advisory свежие, после
+последнего зелёного прогона — шаг «Dependency audit» в `ci.yml` упал бы на любой ветке.
+Починено на этой же ветке: `overrides: { fast-uri: '>=3.1.6 <4' }` в `pnpm-workspace.yaml`
+(тот же паттерн, что уже был для `deepmerge-ts`; dev-only, резолвится в `3.1.7`). Отдельным
+микрокоммитом на main не выносили. Осталось 2 moderate (`qs` via `@nestjs/platform-express`)
+— ниже порога `--audit-level=high`, вне рамок.
+
+**Находка `qa` (не баг приложения).** `@axe-core/playwright`, сканируя shadcn-кнопку с
+`transition-all` сразу после клика (курсор на ней, `hover:bg-primary/80` в середине
+перехода), рапортует ложный serious color-contrast. В покое `/login` чист в обоих
+состояниях. E2E-спека паркует курсор в (0,0) и ждёт ~150мс перехода перед сканом
+(`settleHoverState`). Если кто-то добавит axe в компонентный тест «клик → скан» — та же
+грабля.
+
+**Тесты** (после трёх раундов правок ревью). `be`: `auth.service.spec.ts` +
+`common/prisma-errors.spec.ts` (новые) + обновлены `auth.controller.spec.ts` /
+`users.service.spec.ts` — 16 suites / 114 тестов, покрытие >80% по всем 4 метрикам
+(P2002-хелпер покрыт для всех форм target; enumeration-путь — с падающим `hash()` и с
+падающим `verify()`). `fe`: 6 новых `*.test.tsx`/`.test.ts` + расширены существующие —
+14 файлов / 67 тестов, глобально ~90.6/89.6. `qa`: `apps/e2e/tests/email-password-auth.spec.ts` (новый) —
+регистрация через UI → дашборд → логаут → вход → неверный пароль (генерик-ошибка, без утечки
+существования email) → переключатель + a11y-скан в обоих состояниях; `full-flow.spec.ts` не
+тронут, весь E2E-набор 5/5.
+
 ## push-gate hook больше не мешает push тега (2026-09-02)
 
 **Проблема.** Pre-push хук (`.claude/hooks/push-gate.sh`) срабатывает на любую команду со

@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AuthUser } from '@link-shortener/shared-types';
-import { apiClient } from '@/lib/api-client';
-import { useAuthStore } from '@/stores/auth.store';
+import { completeLogin } from './completeLogin';
 
 // Backend redirects here as http://localhost:5173/auth/callback#token=<jwt> after a
 // successful Google login (see apps/api/src/auth/auth.controller.ts). Token lives in the URL
@@ -23,20 +21,11 @@ export function AuthCallback() {
       return;
     }
 
-    // Set the token first (synchronous, in-memory) so the /auth/me call below picks it up via
-    // api-client's Authorization header. login() below records the real user alongside it.
-    useAuthStore.setState({ token });
-
-    apiClient
-      .get<AuthUser>('/auth/me')
-      .then((user) => {
-        useAuthStore.getState().login(token, user);
-        navigate('/', { replace: true });
-      })
-      .catch(() => {
-        useAuthStore.getState().logout();
-        navigate('/login', { replace: true });
-      });
+    // Same "token -> /auth/me -> store -> dashboard" sequence the email/password forms run.
+    // completeLogin() already clears the token on failure; we just fall back to /login.
+    completeLogin(token, navigate).catch(() => {
+      navigate('/login', { replace: true });
+    });
   }, [navigate]);
 
   return (

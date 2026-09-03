@@ -11,13 +11,18 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  googleId    String   @unique
-  email       String   @unique
-  displayName String?
-  avatarUrl   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id String @id @default(uuid())
+  // Nullable since email+password auth: a user can register with a password and never link a
+  // Google account. Still @unique - two Google accounts can't map to one row. The invariant
+  // "at least one of googleId / passwordHash is set" isn't expressible here; UsersService
+  // enforces it (never creates a User without one).
+  googleId     String? @unique
+  email        String  @unique
+  passwordHash String?
+  displayName  String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   links Link[]
 }
